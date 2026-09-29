@@ -129,6 +129,28 @@ final class InsightNarrator {
         }
     }
 
+    /// One-shot summary for Siri and Shortcuts. Reuses the cached report when the facts match,
+    /// generates on device when possible, and otherwise returns the rule-based highlights.
+    static func summary(for insights: WeeklyInsights, scope: String) async -> (content: HighlightContent, isGenerated: Bool) {
+        if let cached = loadCache()[scope], cached.facts == insights.facts {
+            return (cached.content, true)
+        }
+        guard unavailableReason == nil else { return (insights.fallback, false) }
+        do {
+            let session = LanguageModelSession(instructions: instructions)
+            let response = try await session.respond(to: insights.facts, generating: FieldInsightReport.self)
+            let content = HighlightContent(
+                headline: response.content.headline,
+                observations: response.content.observations,
+                recommendation: response.content.recommendation
+            )
+            save(CachedReport(facts: insights.facts, content: content, generatedAt: .now), for: scope)
+            return (content, true)
+        } catch {
+            return (insights.fallback, false)
+        }
+    }
+
     private static func loadCache() -> [String: CachedReport] {
         guard let data = UserDefaults.standard.data(forKey: cacheKey),
               let cache = try? JSONDecoder().decode([String: CachedReport].self, from: data)
@@ -152,6 +174,32 @@ final class InsightNarrator {
 }
 
 // MARK: - Facts and fallback
+
+/// Last-7-days stats for one scope, plus the model facts and rule-based fallback derived from them.
+struct WeeklyInsights {
+    let current: InsightsStats
+    let previous: InsightsStats
+    let latest: DetectionEvent?
+    let facts: String
+    let fallback: HighlightContent
+
+    /// - Parameter events: events already filtered to the scope, in any order.
+    init(events: [DetectionEvent], sessions: [ScanSession], scopeName: String) {
+        let weekStart = InsightsRange.week.startDate
+        let previousStart = Calendar.current.date(byAdding: .day, value: -7, to: weekStart) ?? weekStart
+        current = InsightsStats(
+            events: events.filter { $0.timestamp >= weekStart },
+            sessions: sessions.filter { $0.startedAt >= weekStart }
+        )
+        previous = InsightsStats(
+            events: events.filter { $0.timestamp >= previousStart && $0.timestamp < weekStart },
+            sessions: sessions.filter { $0.startedAt >= previousStart && $0.startedAt < weekStart }
+        )
+        latest = events.max { $0.timestamp < $1.timestamp }
+        facts = InsightDigest.facts(current: current, previous: previous, scope: scopeName, latest: latest)
+        fallback = InsightDigest.fallback(current: current, previous: previous, latest: latest)
+    }
+}
 
 enum InsightDigest {
     /// Compact, numbers-only briefing for the language model (kept well inside its context window).

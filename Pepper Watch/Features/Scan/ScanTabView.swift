@@ -5,6 +5,8 @@
 //  Scan tab flow: onboarding (first field) → Fields home → full-screen scanner.
 //
 
+import AppIntents
+import CoreSpotlight
 import SwiftData
 import SwiftUI
 
@@ -65,6 +67,15 @@ struct ScanTabView: View {
         }
         .task(id: fields.map(\.region)) {
             await geofence.sync(fields.map(\.region))
+            // Let Siri, Shortcuts and Spotlight know about field names.
+            PepperWatchShortcuts.updateAppShortcutParameters()
+            try? await CSSearchableIndex.default().indexAppEntities(fields.map { FieldEntity($0) })
+        }
+        .onChange(of: AppNavigator.shared.pendingScanFieldID, initial: true) { _, fieldID in
+            // "Start scanning" from Siri or a widget opens that field's scanner.
+            guard let fieldID, let field = fields.first(where: { $0.id == fieldID }) else { return }
+            path = [field]
+            AppNavigator.shared.pendingScanFieldID = nil
         }
     }
 }

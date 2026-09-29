@@ -7,6 +7,7 @@
 
 import SwiftData
 import SwiftUI
+import TipKit
 
 enum InsightsRange: String, CaseIterable, Identifiable {
     case day = "D"
@@ -156,6 +157,13 @@ struct InsightsView: View {
             .sheet(isPresented: $isEditingPinned) {
                 EditPinnedMetricsView()
             }
+            .onChange(of: AppNavigator.shared.pendingInsightsFieldID, initial: true) { _, fieldID in
+                // Widget taps and "Show insights" open Insights filtered to that field.
+                guard let fieldID else { return }
+                selectedFieldID = fieldID
+                path = []
+                AppNavigator.shared.pendingInsightsFieldID = nil
+            }
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
                     Menu {
@@ -194,19 +202,10 @@ struct InsightsView: View {
     }
 
     private var summary: some View {
-        let weekStart = InsightsRange.week.startDate
-        let previousStart = Calendar.current.date(byAdding: .day, value: -7, to: weekStart) ?? weekStart
-        let current = InsightsStats(
-            events: scopedEvents.filter { $0.timestamp >= weekStart },
-            sessions: scopedSessions.filter { $0.startedAt >= weekStart }
-        )
-        let previous = InsightsStats(
-            events: scopedEvents.filter { $0.timestamp >= previousStart && $0.timestamp < weekStart },
-            sessions: scopedSessions.filter { $0.startedAt >= previousStart && $0.startedAt < weekStart }
-        )
-        let latest = scopedEvents.last
-        let facts = InsightDigest.facts(current: current, previous: previous, scope: selectedField?.name ?? "all fields", latest: latest)
-        let fallback = InsightDigest.fallback(current: current, previous: previous, latest: latest)
+        let weekly = WeeklyInsights(events: scopedEvents, sessions: scopedSessions, scopeName: selectedField?.name ?? "all fields")
+        let current = weekly.current
+        let facts = weekly.facts
+        let fallback = weekly.fallback
         let pinned = PinnedMetrics.decode(pinnedRaw)
         let others = InsightMetric.allCases.filter { !pinned.contains($0) }
 
@@ -217,8 +216,9 @@ struct InsightsView: View {
                     narrator.refresh(facts: facts, scope: selectedFieldID, force: true)
                 }
 
-                SectionHeader(title: "Pinned", detail: "Past 7 days", actionTitle: "Edit") {
+                SectionHeader(title: "Pinned", actionTitle: "Edit") {
                     isEditingPinned = true
+                    PinMetricsTip().invalidate(reason: .actionPerformed)
                 }
                 .padding(.top, 8)
 
@@ -403,6 +403,7 @@ private struct SectionHeader: View {
             if let actionTitle, let action {
                 Button(actionTitle, action: action)
                     .font(.body.weight(.medium))
+                    .popoverTip(actionTitle == "Edit" ? PinMetricsTip() : nil)
             }
         }
         .padding(.horizontal, 4)
@@ -427,13 +428,17 @@ private struct HighlightsCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Label(isAI ? "Apple Intelligence" : "Highlights", systemImage: isAI ? "apple.intelligence" : "sparkles")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(
-                        LinearGradient(colors: [.orange, .pink, .purple, .blue], startPoint: .leading, endPoint: .trailing)
-                    )
-                Spacer()
+            HStack(alignment: .firstTextBaseline, spacing: 12) {
+                if let headline = content.headline {
+                    Text(headline)
+                        .font(.title3.weight(.semibold))
+                        .contentTransition(.opacity)
+                } else {
+                    Text("Summarizing your scans…")
+                        .font(.title3.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
+                Spacer(minLength: 0)
                 if narrator.phase == .generating {
                     ProgressView()
                         .controlSize(.small)
@@ -442,16 +447,6 @@ private struct HighlightsCard: View {
                         .labelStyle(.iconOnly)
                         .font(.subheadline)
                 }
-            }
-
-            if let headline = content.headline {
-                Text(headline)
-                    .font(.title3.weight(.semibold))
-                    .contentTransition(.opacity)
-            } else {
-                Text("Summarizing your scans…")
-                    .font(.title3.weight(.semibold))
-                    .foregroundStyle(.secondary)
             }
 
             VStack(alignment: .leading, spacing: 8) {
@@ -495,9 +490,9 @@ private struct HighlightsCard: View {
     private var footnote: String {
         switch narrator.phase {
         case .generating:
-            "Generating on device from your scan statistics."
+            "Summarizing with Apple Intelligence on this device."
         case .generated:
-            "Generated on device \(narrator.generatedAt.map { $0.formatted(.relative(presentation: .named)) } ?? "just now") from your scan statistics. Updates when new scans arrive. Check guidance with your local agriculturist."
+            "Summarized with Apple Intelligence on this device \(narrator.generatedAt.map { $0.formatted(.relative(presentation: .named)) } ?? "just now"). Updates when new scans arrive. Check guidance with your local agriculturist."
         case .unavailable(let reason):
             "\(reason) Showing standard highlights."
         case .failed:

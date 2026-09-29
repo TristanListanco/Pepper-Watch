@@ -135,9 +135,6 @@ struct InsightDetailView: View {
     private func highlightsSection(_ lines: [String]) -> some View {
         DetailSection(title: "Highlights") {
             VStack(alignment: .leading, spacing: 10) {
-                Label(metric.title, systemImage: metric.symbol)
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(metric.tint)
                 if let lead = lines.first {
                     Text(lead)
                         .font(.title3.weight(.semibold))
@@ -155,8 +152,8 @@ struct InsightDetailView: View {
 
     private var aboutSection: some View {
         DetailSection(title: "About \(metric.title)") {
-            if isRegular {
-                // iPad: full-width card, text balanced across two columns.
+            if isRegular, metric.about.count > Self.twoColumnThreshold {
+                // iPad: long text is balanced across two columns; short text stays in one.
                 let (leading, trailing) = Self.balancedColumns(metric.about)
                 HStack(alignment: .top, spacing: 32) {
                     aboutText(leading)
@@ -187,22 +184,24 @@ struct InsightDetailView: View {
         }
     }
 
-    /// Splits text at sentence boundaries into two columns of similar length.
+    /// Characters beyond which About text reads better in two columns on iPad.
+    private static let twoColumnThreshold = 240
+
+    /// Flows text into two columns of similar length, breaking between words like a newspaper column.
     static func balancedColumns(_ text: String) -> (String, String) {
-        var sentences: [String] = []
-        text.enumerateSubstrings(in: text.startIndex..., options: .bySentences) { sentence, _, _, _ in
-            if let sentence { sentences.append(sentence.trimmingCharacters(in: .whitespaces)) }
+        let words = text.split(separator: " ", omittingEmptySubsequences: true)
+        guard words.count > 1 else { return (text, "") }
+        let half = text.count / 2
+        var length = 0
+        var splitIndex = words.count
+        for (index, word) in words.enumerated() {
+            length += word.count + 1
+            if length >= half {
+                splitIndex = index + 1
+                break
+            }
         }
-        guard sentences.count > 1 else { return (text, "") }
-        let half = sentences.reduce(0) { $0 + $1.count } / 2
-        var leading: [String] = []
-        var count = 0
-        for sentence in sentences where count < half {
-            leading.append(sentence)
-            count += sentence.count
-        }
-        if leading.count == sentences.count { leading.removeLast() }
-        return (leading.joined(separator: " "), sentences.dropFirst(leading.count).joined(separator: " "))
+        return (words[..<splitIndex].joined(separator: " "), words[splitIndex...].joined(separator: " "))
     }
 
     // MARK: - Highlights

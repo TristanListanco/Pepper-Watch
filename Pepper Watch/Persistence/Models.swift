@@ -58,11 +58,22 @@ final class Field {
     var createdAt: Date = Date.now
     var isDemo: Bool = false
 
-    @Relationship(deleteRule: .nullify, inverse: \DetectionEvent.field)
-    var events: [DetectionEvent] = []
+    // CloudKit sync requires optional to-many relationships; `originalName` keeps existing data.
+    @Relationship(deleteRule: .nullify, originalName: "events", inverse: \DetectionEvent.field)
+    var fieldEvents: [DetectionEvent]? = []
 
-    @Relationship(deleteRule: .nullify, inverse: \ScanSession.field)
-    var sessions: [ScanSession] = []
+    @Relationship(deleteRule: .nullify, originalName: "sessions", inverse: \ScanSession.field)
+    var fieldSessions: [ScanSession]? = []
+
+    var events: [DetectionEvent] {
+        get { fieldEvents ?? [] }
+        set { fieldEvents = newValue }
+    }
+
+    var sessions: [ScanSession] {
+        get { fieldSessions ?? [] }
+        set { fieldSessions = newValue }
+    }
 
     init(name: String, locationName: String, latitude: Double, longitude: Double, radiusMeters: Double) {
         self.name = name
@@ -74,10 +85,6 @@ final class Field {
 
     var region: FieldRegion {
         FieldRegion(id: id, name: name, latitude: latitude, longitude: longitude, radiusMeters: radiusMeters)
-    }
-
-    var latestEvent: DetectionEvent? {
-        events.max { $0.timestamp < $1.timestamp }
     }
 }
 
@@ -104,8 +111,13 @@ final class ScanSession {
     var isDemo: Bool = false
     var field: Field?
 
-    @Relationship(deleteRule: .nullify, inverse: \DetectionEvent.session)
-    var events: [DetectionEvent] = []
+    @Relationship(deleteRule: .nullify, originalName: "events", inverse: \DetectionEvent.session)
+    var sessionEvents: [DetectionEvent]? = []
+
+    var events: [DetectionEvent] {
+        get { sessionEvents ?? [] }
+        set { sessionEvents = newValue }
+    }
 
     init(fieldName: String, computeUnits: String, startedAt: Date = .now) {
         self.fieldName = fieldName
@@ -132,6 +144,12 @@ final class DetectionEvent {
     var notes: String = ""
     /// Whether the device was inside the field's geofence when this was logged (`nil` = not checked).
     var geofenceVerified: Bool?
+    // Saved image insight, generated once so it isn't recomputed on every visit.
+    var insightHeadline: String?
+    var insightObservations: [String]?
+    var insightNextStep: String?
+    var insightSourceRaw: String?
+    var insightGeneratedAt: Date?
     // Denormalized so dashboards can aggregate without faulting every box.
     var aphidCount: Int = 0
     var healthyCount: Int = 0
@@ -142,8 +160,13 @@ final class DetectionEvent {
     var session: ScanSession?
     var field: Field?
 
-    @Relationship(deleteRule: .cascade, inverse: \BoundingBox.event)
-    var boxes: [BoundingBox] = []
+    @Relationship(deleteRule: .cascade, originalName: "boxes", inverse: \BoundingBox.event)
+    var detectionBoxes: [BoundingBox]? = []
+
+    var boxes: [BoundingBox] {
+        get { detectionBoxes ?? [] }
+        set { detectionBoxes = newValue }
+    }
 
     init(
         timestamp: Date = .now,

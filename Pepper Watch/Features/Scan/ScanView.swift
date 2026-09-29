@@ -5,6 +5,7 @@
 
 import PhotosUI
 import SwiftUI
+import TipKit
 
 struct ScanView: View {
     let field: Field
@@ -149,8 +150,21 @@ struct ScanView: View {
                 ProgressView(engine.state == .loading ? "Loading model…" : "Starting camera…")
                     .padding()
                     .glassEffect(.regular, in: .rect(cornerRadius: 16))
+            } else if scanner.status == .running, scanner.isPaused {
+                Button {
+                    startDetecting()
+                } label: {
+                    Label("Start Detecting", systemImage: "play.fill")
+                        .font(.headline)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 6)
+                }
+                .buttonStyle(.glassProminent)
+                .popoverTip(StartDetectingTip())
+                .transition(.scale.combined(with: .opacity))
             }
         }
+        .animation(.smooth, value: scanner.isPaused)
     }
 
     private var topBar: some View {
@@ -165,14 +179,6 @@ struct ScanView: View {
                 VStack(alignment: .trailing, spacing: 8) {
                     if showPerformanceHUD, scanner.status == .running {
                         performanceChip
-                    }
-                    if scanner.isPaused {
-                        Label("Paused", systemImage: "pause.fill")
-                            .font(.caption.weight(.semibold))
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 6)
-                            .glassEffect(.regular.tint(.yellow.opacity(0.4)), in: .capsule)
-                            .glassEffectID("paused", in: glassNamespace)
                     }
                 }
             }
@@ -293,16 +299,17 @@ struct ScanView: View {
             photoPickerButton(label: nil)
 
             CircleGlassButton(
-                title: scanner.isPaused ? "Resume Inference" : "Pause Inference",
+                title: scanner.isPaused ? "Start Detecting" : "Pause Detecting",
                 systemImage: scanner.isPaused ? "play.fill" : "pause.fill"
             ) {
-                scanner.togglePause()
+                if scanner.isPaused { startDetecting() } else { scanner.togglePause() }
             }
 
             CircleGlassButton(title: "Capture Snapshot", systemImage: "camera.shutter.button.fill", diameter: 56, isProminent: true) {
                 scanner.captureSnapshot()
             }
-            .disabled(scanner.status != .running || scanner.isLoggingBlockedByGeofence)
+            .disabled(scanner.status != .running || scanner.isPaused || scanner.isLoggingBlockedByGeofence)
+            .popoverTip(SnapshotTip())
 
             CircleGlassButton(
                 title: scanner.isTorchOn ? "Turn Off Light" : "Turn On Light",
@@ -326,6 +333,12 @@ struct ScanView: View {
             .disabled(scanner.capabilities.zoomPresets.count < 2)
             .accessibilityLabel("Zoom \(scanner.zoom.fixed(1)) times")
         }
+    }
+
+    private func startDetecting() {
+        scanner.togglePause()
+        StartDetectingTip().invalidate(reason: .actionPerformed)
+        SnapshotTip.hasStartedDetecting = true
     }
 
     private func photoPickerButton(label: String?) -> some View {
