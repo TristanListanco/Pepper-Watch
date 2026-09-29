@@ -100,11 +100,12 @@ struct MiniHistogram: View {
 
 struct MiniRankBars: View {
     let fields: [InsightsStats.FieldRate]
+    var color: Color = .teal
 
     var body: some View {
         Chart(fields.prefix(3)) { field in
             BarMark(x: .value("Infested", field.rate), y: .value("Field", field.field))
-                .foregroundStyle(LeafClass.aphidInfested.color)
+                .foregroundStyle(color)
                 .cornerRadius(2)
         }
         .chartXScale(domain: 0...1)

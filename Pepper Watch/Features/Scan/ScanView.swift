@@ -137,7 +137,13 @@ struct ScanView: View {
         }
         .ignoresSafeArea()
         .overlay(alignment: .top) { topBar.padding(.horizontal) }
-        .overlay(alignment: .bottom) { bottomPanel.padding(.horizontal).padding(.bottom, 8) }
+        .overlay(alignment: .bottom) {
+            // Keep controls within reach and readable on iPad instead of spanning the full width.
+            bottomPanel
+                .frame(maxWidth: 640)
+                .padding(.horizontal)
+                .padding(.bottom, 8)
+        }
         .overlay {
             if scanner.status == .starting || engine.state == .loading {
                 ProgressView(engine.state == .loading ? "Loading model…" : "Starting camera…")

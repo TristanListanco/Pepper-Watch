@@ -40,7 +40,7 @@ struct HistoryView: View {
     @Query(sort: \Field.name) private var fields: [Field]
     @Environment(\.modelContext) private var modelContext
     @Environment(\.systemLogger) private var logger
-    @AppStorage("history.columns") private var columnCount = 3
+    @AppStorage("history.thumbnailLevel") private var thumbnailLevel = 2
     @State private var searchText = ""
     @State private var filter: HistoryFilter = .all
     @State private var fieldFilterID = ""
@@ -50,7 +50,12 @@ struct HistoryView: View {
     @State private var pendingDeletion: [DetectionEvent] = []
     @State private var pinchBaseline: CGFloat = 1
 
-    private static let columnRange = 1...6
+    /// Minimum thumbnail widths; the grid fits as many columns as the width allows (3 on iPhone at the default).
+    private static let thumbnailSizes: [CGFloat] = [64, 84, 110, 150, 210, 300]
+
+    private var thumbnailSize: CGFloat {
+        Self.thumbnailSizes[min(max(thumbnailLevel, 0), Self.thumbnailSizes.count - 1)]
+    }
 
     /// Events matching the filter menu and search, before the chart's day selection.
     private var matchingEvents: [DetectionEvent] {
@@ -86,8 +91,9 @@ struct HistoryView: View {
                     grid
                 }
             }
+            .background(Color(.systemGroupedBackground))
             .simultaneousGesture(pinchToResize)
-            .sensoryFeedback(.selection, trigger: columnCount)
+            .sensoryFeedback(.selection, trigger: thumbnailLevel)
             .navigationTitle(isSelecting ? (selection.isEmpty ? "Select Items" : "\(selection.count) Selected") : "History")
             .navigationBarTitleDisplayMode(isSelecting ? .inline : .automatic)
             .navigationDestination(for: DetectionEvent.self) { event in
@@ -169,7 +175,7 @@ struct HistoryView: View {
 
     private var grid: some View {
         LazyVGrid(
-            columns: Array(repeating: GridItem(.flexible(), spacing: 3), count: columnCount),
+            columns: [GridItem(.adaptive(minimum: thumbnailSize), spacing: 3)],
             spacing: 3,
             pinnedViews: [.sectionHeaders]
         ) {
@@ -184,7 +190,7 @@ struct HistoryView: View {
             }
         }
         .padding(.horizontal, 3)
-        .animation(.snappy, value: columnCount)
+        .animation(.snappy, value: thumbnailLevel)
     }
 
     @ViewBuilder
@@ -193,13 +199,13 @@ struct HistoryView: View {
             Button {
                 toggleSelection(event)
             } label: {
-                HistoryTile(event: event, compact: columnCount >= 5, isSelected: selection.contains(event.id))
+                HistoryTile(event: event, compact: thumbnailSize < 90, isSelected: selection.contains(event.id))
             }
             .buttonStyle(.plain)
             .accessibilityAddTraits(selection.contains(event.id) ? .isSelected : [])
         } else {
             NavigationLink(value: event) {
-                HistoryTile(event: event, compact: columnCount >= 5, isSelected: nil)
+                HistoryTile(event: event, compact: thumbnailSize < 90, isSelected: nil)
             }
             .buttonStyle(.plain)
             .contextMenu {
@@ -222,11 +228,11 @@ struct HistoryView: View {
         MagnifyGesture()
             .onChanged { value in
                 let ratio = value.magnification / pinchBaseline
-                if ratio > 1.3, columnCount > Self.columnRange.lowerBound {
-                    columnCount -= 1
+                if ratio > 1.3, thumbnailLevel < Self.thumbnailSizes.count - 1 {
+                    thumbnailLevel += 1
                     pinchBaseline = value.magnification
-                } else if ratio < 0.77, columnCount < Self.columnRange.upperBound {
-                    columnCount += 1
+                } else if ratio < 0.77, thumbnailLevel > 0 {
+                    thumbnailLevel -= 1
                     pinchBaseline = value.magnification
                 }
             }
@@ -283,13 +289,13 @@ struct HistoryView: View {
                     }
                     Section("Thumbnail Size") {
                         Button("Larger", systemImage: "plus.magnifyingglass") {
-                            columnCount = max(Self.columnRange.lowerBound, columnCount - 1)
+                            thumbnailLevel = min(thumbnailLevel + 1, Self.thumbnailSizes.count - 1)
                         }
-                        .disabled(columnCount == Self.columnRange.lowerBound)
+                        .disabled(thumbnailLevel == Self.thumbnailSizes.count - 1)
                         Button("Smaller", systemImage: "minus.magnifyingglass") {
-                            columnCount = min(Self.columnRange.upperBound, columnCount + 1)
+                            thumbnailLevel = max(thumbnailLevel - 1, 0)
                         }
-                        .disabled(columnCount == Self.columnRange.upperBound)
+                        .disabled(thumbnailLevel == 0)
                     }
                 } label: {
                     Label("Filter", systemImage: filter == .all && fieldFilterID.isEmpty ? "line.3.horizontal.decrease" : "line.3.horizontal.decrease.circle.fill")

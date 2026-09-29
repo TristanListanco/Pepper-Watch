@@ -17,6 +17,7 @@ struct DetectionDetailView: View {
     @State private var shareImage: Image?
     @State private var isConfirmingDelete = false
     @State private var isViewingFullScreen = false
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     private var sortedBoxes: [BoundingBox] {
         event.boxes.sorted { $0.confidence > $1.confidence }
@@ -24,42 +25,38 @@ struct DetectionDetailView: View {
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                AnnotatedImageView(imageData: event.imageData, detections: event.detections, highlightedID: highlightedID)
-                    .clipShape(.rect(cornerRadius: 20))
-                    .animation(.smooth, value: highlightedID)
-                    .overlay(alignment: .bottomTrailing) {
-                        if event.imageData != nil {
-                            Image(systemName: "arrow.up.left.and.arrow.down.right")
-                                .font(.caption.weight(.bold))
-                                .padding(8)
-                                .glassEffect(.regular, in: .circle)
-                                .padding(10)
-                        }
+            if horizontalSizeClass == .regular {
+                // iPad: photo and summary beside the guidance, validation and metadata.
+                HStack(alignment: .top, spacing: 20) {
+                    VStack(alignment: .leading, spacing: 16) {
+                        photo
+                        summary
+                        notes
                     }
-                    .onTapGesture { if event.imageData != nil { isViewingFullScreen = true } }
-                    .accessibilityAddTraits(.isButton)
-                    .accessibilityHint("Opens the photo full screen with pinch to zoom")
-
-                summary
-
-                if let severity = event.severity {
-                    RecommendationCard(severity: severity)
+                    .frame(maxWidth: .infinity)
+                    VStack(alignment: .leading, spacing: 16) {
+                        if let severity = event.severity {
+                            RecommendationCard(severity: severity)
+                        }
+                        verification
+                        details
+                    }
+                    .frame(maxWidth: .infinity)
                 }
-
-                verification
-
-                details
-
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("Notes").font(.headline)
-                    TextField("Treatment applied, plant row, weather…", text: $event.notes, axis: .vertical)
-                        .lineLimit(3...8)
-                        .padding(12)
-                        .background(.card, in: .rect(cornerRadius: 14))
+                .padding()
+            } else {
+                VStack(alignment: .leading, spacing: 16) {
+                    photo
+                    summary
+                    if let severity = event.severity {
+                        RecommendationCard(severity: severity)
+                    }
+                    verification
+                    details
+                    notes
                 }
+                .padding()
             }
-            .padding()
         }
         .background(Color(.systemGroupedBackground))
         .navigationTitle(event.timestamp.formatted(date: .abbreviated, time: .shortened))
@@ -89,6 +86,34 @@ struct DetectionDetailView: View {
             renderShareImage()
         }
         .onDisappear { try? modelContext.save() }
+    }
+
+    private var photo: some View {
+        AnnotatedImageView(imageData: event.imageData, detections: event.detections, highlightedID: highlightedID)
+            .clipShape(.rect(cornerRadius: 20))
+            .animation(.smooth, value: highlightedID)
+            .overlay(alignment: .bottomTrailing) {
+                if event.imageData != nil {
+                    Image(systemName: "arrow.up.left.and.arrow.down.right")
+                        .font(.caption.weight(.bold))
+                        .padding(8)
+                        .glassEffect(.regular, in: .circle)
+                        .padding(10)
+                }
+            }
+            .onTapGesture { if event.imageData != nil { isViewingFullScreen = true } }
+            .accessibilityAddTraits(.isButton)
+            .accessibilityHint("Opens the photo full screen with pinch to zoom")
+    }
+
+    private var notes: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("Notes").font(.headline)
+            TextField("Treatment applied, plant row, weather…", text: $event.notes, axis: .vertical)
+                .lineLimit(3...8)
+                .padding(12)
+                .background(.card, in: .rect(cornerRadius: 14))
+        }
     }
 
     private var summary: some View {

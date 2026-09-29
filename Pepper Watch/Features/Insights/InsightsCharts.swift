@@ -98,6 +98,7 @@ struct LeafHealthDonut: View {
 struct InfestationTrendChart: View {
     let trend: [InsightsStats.TrendPoint]
     var unit: Calendar.Component = .day
+    var height: CGFloat = 240
     @State private var selectedDate: Date?
 
     private var selectedPoint: InsightsStats.TrendPoint? {
@@ -157,7 +158,7 @@ struct InfestationTrendChart: View {
             }
         }
         .chartXSelection(value: $selectedDate)
-        .frame(height: 240)
+        .frame(height: height)
     }
 }
 
@@ -166,6 +167,7 @@ struct InfestationTrendChart: View {
 struct DailyDetectionsChart: View {
     let counts: [InsightsStats.ClassCount]
     var unit: Calendar.Component = .day
+    var height: CGFloat = 240
     @State private var selectedDate: Date?
 
     var body: some View {
@@ -196,7 +198,7 @@ struct DailyDetectionsChart: View {
         .leafClassColorScale()
         .chartLegend(position: .top, alignment: .leading)
         .chartXSelection(value: $selectedDate)
-        .frame(height: 240)
+        .frame(height: height)
     }
 }
 
@@ -247,11 +249,12 @@ struct SeverityBreakdownChart: View {
 
 struct FieldRatesChart: View {
     let fields: [InsightsStats.FieldRate]
+    var color: Color = .teal
 
     var body: some View {
         Chart(fields) { field in
             BarMark(x: .value("Infested", field.rate), y: .value("Field", field.field))
-                .foregroundStyle(LeafClass.aphidInfested.color)
+                .foregroundStyle(color)
                 .cornerRadius(4)
                 .annotation(position: .trailing, spacing: 6) {
                     Text("\(field.rate.percentText) · \(field.total) leaves")
@@ -269,6 +272,7 @@ struct FieldRatesChart: View {
 
 struct ConfidenceHistogramChart: View {
     let bins: [InsightsStats.ConfidenceBin]
+    var height: CGFloat = 220
 
     var body: some View {
         Chart(bins) { bin in
@@ -284,7 +288,7 @@ struct ConfidenceHistogramChart: View {
                 AxisValueLabel(orientation: .verticalReversed)
             }
         }
-        .frame(height: 220)
+        .frame(height: height)
     }
 }
 
@@ -293,33 +297,43 @@ struct ConfidenceHistogramChart: View {
 struct ValidationMatrixView: View {
     let metrics: ValidationMetrics
 
+    private static let headerWidth: CGFloat = 76
+
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(spacing: 16) {
             Grid(horizontalSpacing: 6, verticalSpacing: 6) {
                 GridRow {
-                    Color.clear.gridCellUnsizedAxes([.horizontal, .vertical])
+                    Color.clear
+                        .frame(width: Self.headerWidth, height: 1)
                     Text("Actual\ninfested").gridColumnHeader()
+                        .frame(maxWidth: .infinity)
                     Text("Actual\nhealthy").gridColumnHeader()
+                        .frame(maxWidth: .infinity)
                 }
                 GridRow {
                     Text("Predicted\ninfested").gridRowHeader()
+                        .frame(width: Self.headerWidth, alignment: .trailing)
                     cell("TP", metrics.truePositives, note: "Correct")
                     cell("FP", metrics.falsePositives, note: "False alarm")
                 }
                 GridRow {
                     Text("Predicted\nhealthy").gridRowHeader()
+                        .frame(width: Self.headerWidth, alignment: .trailing)
                     cell("FN", metrics.falseNegatives, note: "Missed")
                     cell("TN", metrics.trueNegatives, note: "Correct")
                 }
             }
+            .frame(maxWidth: .infinity)
 
-            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+            LazyVGrid(columns: [GridItem(.flexible(), spacing: 10), GridItem(.flexible(), spacing: 10)], spacing: 10) {
                 metricTile("Precision", metrics.precision, formula: "TP / (TP + FP)")
                 metricTile("Recall", metrics.recall, formula: "TP / (TP + FN)")
                 metricTile("Accuracy", metrics.accuracy, formula: "(TP + TN) / all")
                 metricTile("F1-score", metrics.f1, formula: "2PR / (P + R)")
             }
         }
+        .frame(maxWidth: 560)
+        .frame(maxWidth: .infinity)
     }
 
     private func cell(_ title: String, _ count: Int, note: String) -> some View {
@@ -364,6 +378,9 @@ private extension Text {
 struct SessionPerformanceChart: View {
     let sessions: [InsightsStats.SessionPerformance]
     let target: Double
+    /// Matches the Real-time Performance card tint.
+    var color: Color = .indigo
+    var height: CGFloat = 200
     @State private var selectedDate: Date?
 
     private var selected: InsightsStats.SessionPerformance? {
@@ -372,11 +389,11 @@ struct SessionPerformanceChart: View {
     }
 
     var body: some View {
-        let passColor = Color.accentColor
+        let passColor = color
         let failColor = Severity.severe.color
         Chart {
             RuleMark(y: .value("Target", target))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(Color.secondary)
                 .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 4]))
                 .annotation(position: .top, alignment: .trailing, spacing: 2) {
                     Text("Target ≥ \(target.fixed(0)) FPS")
@@ -386,7 +403,7 @@ struct SessionPerformanceChart: View {
 
             ForEach(sessions) { session in
                 LineMark(x: .value("Session", session.date), y: .value("FPS", session.fps))
-                    .foregroundStyle(passColor.opacity(0.4))
+                    .foregroundStyle(passColor.opacity(0.6))
                     .lineStyle(StrokeStyle(lineWidth: 2))
                 PointMark(x: .value("Session", session.date), y: .value("FPS", session.fps))
                     .foregroundStyle(session.fps >= target ? passColor : failColor)
@@ -411,7 +428,7 @@ struct SessionPerformanceChart: View {
         }
         .chartYScale(domain: 0...max(target * 2, (sessions.map(\.fps).max() ?? 0) * 1.1))
         .chartXSelection(value: $selectedDate)
-        .frame(height: 200)
+        .frame(height: height)
     }
 }
 

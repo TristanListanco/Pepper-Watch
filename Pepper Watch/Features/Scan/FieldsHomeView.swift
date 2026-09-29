@@ -21,6 +21,7 @@ struct FieldsHomeView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.systemLogger) private var logger
     @Environment(\.openURL) private var openURL
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var pendingDeletion: Field?
 
     /// Fields ordered by distance when a fix is available, otherwise by creation date.
@@ -35,28 +36,42 @@ struct FieldsHomeView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                recommendationCard
-                FieldsOverviewMap(fields: fields)
-                    .frame(height: 200)
-                    .clipShape(.rect(cornerRadius: 24))
+                if horizontalSizeClass == .regular {
+                    // iPad: recommendation and map side by side.
+                    HStack(alignment: .top, spacing: 16) {
+                        recommendationCard
+                            .frame(maxWidth: .infinity)
+                        FieldsOverviewMap(fields: fields)
+                            .frame(maxWidth: .infinity, minHeight: 260, maxHeight: .infinity)
+                            .clipShape(.rect(cornerRadius: 24))
+                    }
+                    .fixedSize(horizontal: false, vertical: true)
+                } else {
+                    recommendationCard
+                    FieldsOverviewMap(fields: fields)
+                        .frame(height: 200)
+                        .clipShape(.rect(cornerRadius: 24))
+                }
 
                 Text("Your Fields")
                     .font(.title3.weight(.semibold))
                     .padding(.top, 4)
 
-                ForEach(sortedFields) { field in
-                    Button {
-                        onScan(field)
-                    } label: {
-                        FieldCard(field: field, status: geofence.status(for: field.region, location: location.lastLocation))
-                    }
-                    .buttonStyle(.plain)
-                    .contextMenu {
-                        Button("Scan", systemImage: "camera.viewfinder") { onScan(field) }
-                        Button("Edit Field", systemImage: "pencil") { onEdit(field) }
-                        Button("Directions", systemImage: "figure.walk") { PlaceNamer.openDirections(to: field.region) }
-                        Divider()
-                        Button("Delete Field", systemImage: "trash", role: .destructive) { pendingDeletion = field }
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 320), spacing: 16)], spacing: 16) {
+                    ForEach(sortedFields) { field in
+                        Button {
+                            onScan(field)
+                        } label: {
+                            FieldCard(field: field, status: geofence.status(for: field.region, location: location.lastLocation))
+                        }
+                        .buttonStyle(.plain)
+                        .contextMenu {
+                            Button("Scan", systemImage: "camera.viewfinder") { onScan(field) }
+                            Button("Edit Field", systemImage: "pencil") { onEdit(field) }
+                            Button("Directions", systemImage: "figure.walk") { PlaceNamer.openDirections(to: field.region) }
+                            Divider()
+                            Button("Delete Field", systemImage: "trash", role: .destructive) { pendingDeletion = field }
+                        }
                     }
                 }
             }
@@ -266,9 +281,15 @@ private struct FieldCard: View {
             HStack {
                 if let latest {
                     SeverityBadge(severity: latest.severity, compact: true)
-                    Text("Last scan \(latest.timestamp, format: .relative(presentation: .named))")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
+                    Label {
+                        Text(latest.timestamp, format: .relative(presentation: .named))
+                    } icon: {
+                        Image(systemName: "clock")
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .accessibilityLabel("Last scanned \(latest.timestamp.formatted(.relative(presentation: .named)))")
                 } else {
                     Label("Not scanned yet", systemImage: "camera.viewfinder")
                         .font(.caption)
