@@ -5,7 +5,9 @@
 //  Scan tab home: detects where the device is and recommends the field to scan.
 //
 
+import AppIntents
 import CoreLocation
+import CoreSpotlight
 import MapKit
 import SwiftData
 import SwiftUI
@@ -22,7 +24,21 @@ struct FieldsHomeView: View {
     @Environment(\.systemLogger) private var logger
     @Environment(\.openURL) private var openURL
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Query(sort: \DetectionEvent.timestamp, order: .reverse) private var events: [DetectionEvent]
     @State private var pendingDeletion: Field?
+
+    /// Latest scan and scan count per field, recomputed whenever an event is inserted or deleted.
+    private var activity: [UUID: FieldActivity] {
+        var result: [UUID: FieldActivity] = [:]
+        for event in events {
+            guard let id = event.field?.id else { continue }
+            var entry = result[id] ?? FieldActivity()
+            if entry.latest == nil { entry.latest = event }
+            if entry.severity == nil { entry.severity = event.severity }
+            result[id] = entry
+        }
+        return result
+    }
 
     /// Fields ordered by distance when a fix is available, otherwise by creation date.
     private var sortedFields: [Field] {
@@ -43,7 +59,7 @@ struct FieldsHomeView: View {
                         recommendationCard
                             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
                             .background(.card, in: .rect(cornerRadius: 24))
-                        FieldsOverviewMap(fields: fields)
+                        FieldsOverviewMap(fields: fields, activity: activity)
                             .frame(maxWidth: .infinity, minHeight: 260, maxHeight: .infinity)
                             .clipShape(.rect(cornerRadius: 24))
                     }
@@ -51,7 +67,7 @@ struct FieldsHomeView: View {
                 } else {
                     recommendationCard
                         .background(.card, in: .rect(cornerRadius: 24))
-                    FieldsOverviewMap(fields: fields)
+                    FieldsOverviewMap(fields: fields, activity: activity)
                         .frame(height: 200)
                         .clipShape(.rect(cornerRadius: 24))
                 }
@@ -65,7 +81,11 @@ struct FieldsHomeView: View {
                         Button {
                             onScan(field)
                         } label: {
-                            FieldCard(field: field, status: geofence.status(for: field.region, location: location.lastLocation))
+                            FieldCard(
+                                field: field,
+                                activity: activity[field.id] ?? FieldActivity(),
+                                status: geofence.status(for: field.region, location: location.lastLocation)
+                            )
                         }
                         .buttonStyle(.plain)
                         .contextMenu {
@@ -157,6 +177,7 @@ struct FieldsHomeView: View {
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
+                Spacer(minLength: 0)
                 Button {
                     onScan(field)
                 } label: {
@@ -176,6 +197,7 @@ struct FieldsHomeView: View {
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                 }
+                Spacer(minLength: 0)
                 HStack(spacing: 12) {
                     Button {
                         PlaceNamer.openDirections(to: nearest)
@@ -209,6 +231,8 @@ struct FieldsHomeView: View {
 
     private func delete(_ field: Field, includingScans: Bool) {
         let name = field.name
+        let id = field.id
+        Task { try? await CSSearchableIndex.default().deleteAppEntities(identifiedBy: [id], ofType: FieldEntity.self) }
         if includingScans {
             for event in field.events { modelContext.delete(event) }
         }
@@ -221,15 +245,22 @@ struct FieldsHomeView: View {
 
 // MARK: - Map
 
+/// Latest scan state for one field.
+struct FieldActivity {
+    var latest: DetectionEvent?
+    var severity: Severity?
+}
+
 struct FieldsOverviewMap: View {
     let fields: [Field]
+    var activity: [UUID: FieldActivity] = [:]
 
     var body: some View {
         Map(initialPosition: .automatic) {
             UserAnnotation()
             ForEach(fields) { field in
                 let center = CLLocationCoordinate2D(latitude: field.latitude, longitude: field.longitude)
-                let tint = field.latestEvent?.severity?.color ?? Color.accentColor
+                let tint = activity[field.id]?.severity?.color ?? Color.accentColor
                 MapCircle(center: center, radius: field.radiusMeters)
                     .foregroundStyle(tint.opacity(0.2))
                     .stroke(tint, lineWidth: 2)
@@ -254,10 +285,11 @@ struct FieldsOverviewMap: View {
 
 private struct FieldCard: View {
     let field: Field
+    let activity: FieldActivity
     let status: GeofenceStatus
 
     var body: some View {
-        let latest = field.latestEvent
+        let latest = activity.latest
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 2) {
@@ -269,9 +301,8 @@ private struct FieldCard: View {
                         .lineLimit(1)
                 }
                 Spacer()
-                if status.presence == .inside {
-                    GeofenceBadge(status: status, fieldName: field.name)
-                } else if let distance = status.distanceMeters {
+                // The recommendation card already says when you're inside, so only show distance otherwise.
+                if status.presence != .inside, let distance = status.distanceMeters {
                     Label(distance.distanceText, systemImage: "location")
                         .font(.caption.weight(.semibold).monospacedDigit())
                         .foregroundStyle(.secondary)
@@ -298,9 +329,6 @@ private struct FieldCard: View {
                         .foregroundStyle(.secondary)
                 }
                 Spacer()
-                Text("\(field.events.count) scans")
-                    .font(.caption.monospacedDigit())
-                    .foregroundStyle(.secondary)
                 Image(systemName: "chevron.right")
                     .font(.caption.weight(.semibold))
                     .foregroundStyle(.tertiary)

@@ -3,6 +3,7 @@
 //  Pepper Watch
 //
 
+import AppIntents
 import SwiftData
 import SwiftUI
 
@@ -25,6 +26,16 @@ struct DeveloperView: View {
     @AppStorage(SettingsKey.healthLogInterval) private var healthLogInterval = 30.0
     @AppStorage(SettingsKey.strictGeofence) private var strictGeofence = false
     @AppStorage(SettingsKey.fpsTarget) private var fpsTarget = 17.0
+    @State private var showsWidgetGallery = Self.opensWidgetGallery
+
+    /// Debug builds accept `-PWDeveloperPage widgets` to open the widget gallery for screenshots.
+    private static var opensWidgetGallery: Bool {
+        #if DEBUG
+        UserDefaults.standard.string(forKey: "PWDeveloperPage") == "widgets"
+        #else
+        false
+        #endif
+    }
 
     private var detectorConfiguration: DetectorConfiguration {
         DetectorConfiguration(
@@ -43,10 +54,12 @@ struct DeveloperView: View {
                 overlaySection
                 loggingSection
                 diagnosticsSection
+                siriSection
                 DataManagementSection()
                 aboutSection
             }
             .navigationTitle("Developer")
+            .navigationDestination(isPresented: $showsWidgetGallery) { WidgetGalleryView() }
             .task(id: detectorConfiguration) {
                 // Debounce slider drags: a newer value cancels this task before it applies.
                 try? await Task.sleep(for: .milliseconds(150))
@@ -175,13 +188,37 @@ struct DeveloperView: View {
             } label: {
                 Label("System Log", systemImage: "list.bullet.rectangle")
             }
+            NavigationLink {
+                WidgetGalleryView()
+            } label: {
+                Label("Widgets", systemImage: "square.grid.2x2")
+            }
+            Button("Show Tips Again", systemImage: "lightbulb") {
+                PepperWatchTips.resetOnNextLaunch()
+            }
             Stepper(value: $fpsTarget, in: 5...60, step: 1) {
                 LabeledContent("Real-time target", value: "\(Int(fpsTarget)) FPS")
             }
         } header: {
             Text("Diagnostics")
         } footer: {
-            Text("The thesis requires at least 17 FPS for real-time processing.")
+            Text("The thesis requires at least 17 FPS for real-time processing. Tips reappear the next time you open the app.")
+        }
+    }
+
+    private var siriSection: some View {
+        Section {
+            SiriTipView(intent: CheckFieldStatusIntent())
+                .listRowInsets(EdgeInsets())
+                .listRowBackground(Color.clear)
+            ShortcutsLink()
+                .shortcutsLinkStyle(.automaticOutline)
+                .frame(maxWidth: .infinity)
+                .listRowBackground(Color.clear)
+        } header: {
+            Text("Siri & Shortcuts")
+        } footer: {
+            Text("Ask Siri “Check aphids in Pepper Watch”, “Summarize my fields in Pepper Watch” (uses Apple Intelligence on device), or “Start scanning in Pepper Watch”. Fields also appear in Spotlight.")
         }
     }
 
