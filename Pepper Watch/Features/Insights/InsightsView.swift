@@ -214,7 +214,7 @@ struct InsightsView: View {
             VStack(alignment: .leading, spacing: 12) {
                 SectionHeader(title: "Highlights")
                 HighlightsCard(narrator: narrator, fallback: fallback) {
-                    narrator.refresh(facts: facts, force: true)
+                    narrator.refresh(facts: facts, scope: selectedFieldID, force: true)
                 }
 
                 SectionHeader(title: "Pinned", detail: "Past 7 days", actionTitle: "Edit") {
@@ -260,7 +260,7 @@ struct InsightsView: View {
             }
             .padding()
         }
-        .task(id: facts) { narrator.refresh(facts: facts) }
+        .task(id: facts) { narrator.refresh(facts: facts, scope: selectedFieldID) }
     }
 
     /// One column on iPhone, two or more on iPad depending on the available width.
@@ -494,8 +494,10 @@ private struct HighlightsCard: View {
 
     private var footnote: String {
         switch narrator.phase {
-        case .generating, .generated:
-            "Generated on device from your scan statistics. Check guidance with your local agriculturist."
+        case .generating:
+            "Generating on device from your scan statistics."
+        case .generated:
+            "Generated on device \(narrator.generatedAt.map { $0.formatted(.relative(presentation: .named)) } ?? "just now") from your scan statistics. Updates when new scans arrive. Check guidance with your local agriculturist."
         case .unavailable(let reason):
             "\(reason) Showing standard highlights."
         case .failed:
