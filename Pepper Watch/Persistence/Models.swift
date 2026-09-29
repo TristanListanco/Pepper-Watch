@@ -58,7 +58,7 @@ final class Field {
     var createdAt: Date = Date.now
     var isDemo: Bool = false
 
-    // CloudKit sync requires optional to-many relationships; `originalName` keeps existing data.
+    // Optional to-many relationships keep the schema CloudKit-compatible; `originalName` preserved existing data.
     @Relationship(deleteRule: .nullify, originalName: "events", inverse: \DetectionEvent.field)
     var fieldEvents: [DetectionEvent]? = []
 

@@ -340,7 +340,6 @@
 				INFOPLIST_KEY_CFBundleDisplayName = "Pepper Watch";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Pepper Watch uses the camera to scan bell pepper leaves for aphid damage. Frames are analyzed on this device and never uploaded.";
-				INFOPLIST_FILE = "PepperWatch-Info.plist";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Pepper Watch tags detections with your field location so you can map aphid hotspots. Location data stays on this device.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
@@ -392,7 +391,6 @@
 				INFOPLIST_KEY_CFBundleDisplayName = "Pepper Watch";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Pepper Watch uses the camera to scan bell pepper leaves for aphid damage. Frames are analyzed on this device and never uploaded.";
-				INFOPLIST_FILE = "PepperWatch-Info.plist";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Pepper Watch tags detections with your field location so you can map aphid hotspots. Location data stays on this device.";
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
