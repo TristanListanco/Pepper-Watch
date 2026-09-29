@@ -116,6 +116,7 @@ struct InsightsStats {
     var mapPoints: [MapPoint] = []
     var validation = ValidationMetrics()
     var meanConfidence: Double?
+    var meanConfidenceByClass: [LeafClass: Double] = [:]
     let bucket: Calendar.Component
 
     var totalLeaves: Int { aphidLeaves + healthyLeaves }
@@ -133,6 +134,7 @@ struct InsightsStats {
         var byBucket: [Date: TrendPoint] = [:]
         var confidenceTotal = 0.0
         var boxCount = 0
+        var classConfidence: [LeafClass: (total: Double, count: Int)] = [:]
         var bySeverity: [Severity: Int] = [:]
         var byField: [String: (aphid: Int, total: Int)] = [:]
         var bins: [LeafClass: [Int: Int]] = [:]
@@ -159,6 +161,8 @@ struct InsightsStats {
             for box in event.boxes {
                 confidenceTotal += box.confidence
                 boxCount += 1
+                classConfidence[box.leafClass, default: (0, 0)].total += box.confidence
+                classConfidence[box.leafClass, default: (0, 0)].count += 1
                 let bin = min(Int(box.confidence * 10), 9)
                 bins[box.leafClass, default: [:]][bin, default: 0] += 1
                 if let verdict = box.verdict {
@@ -180,6 +184,7 @@ struct InsightsStats {
 
         averageInferenceMs = events.isEmpty ? 0 : inferenceTotal / Double(events.count)
         meanConfidence = boxCount == 0 ? nil : confidenceTotal / Double(boxCount)
+        meanConfidenceByClass = classConfidence.mapValues { $0.total / Double(max($0.count, 1)) }
         trend = byBucket.values.sorted { $0.date < $1.date }
         classCounts = trend.flatMap { point in
             [

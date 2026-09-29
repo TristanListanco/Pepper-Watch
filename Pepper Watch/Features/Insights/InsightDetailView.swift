@@ -2,7 +2,9 @@
 //  InsightDetailView.swift
 //  Pepper Watch
 //
-//  Expanded view for one metric, with Health-style D / W / M / 6M / Y ranges.
+//  Expanded view for one metric, laid out like an Apple Health detail page:
+//  range picker, headline value, full-width chart, then Highlights, related
+//  charts, About and Options. Sections flow into columns on iPad.
 //
 
 import SwiftData
@@ -15,8 +17,14 @@ struct InsightDetailView: View {
     @Query(sort: \DetectionEvent.timestamp) private var events: [DetectionEvent]
     @Query(sort: \ScanSession.startedAt) private var sessions: [ScanSession]
     @AppStorage(SettingsKey.fpsTarget) private var fpsTarget = 17.0
+    @AppStorage(PinnedMetrics.key) private var pinnedRaw = PinnedMetrics.defaultValue
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var range: InsightsRange = .week
     @State private var showFullMap = false
+
+    private var isRegular: Bool { horizontalSizeClass == .regular }
+    private var chartHeight: CGFloat { isRegular ? 340 : 240 }
+    private var isPinned: Bool { PinnedMetrics.decode(pinnedRaw).contains(metric) }
 
     var body: some View {
         let start = range.startDate
@@ -25,11 +33,12 @@ struct InsightDetailView: View {
         let stats = InsightsStats(events: scopedEvents, sessions: scopedSessions, bucket: range.bucket)
 
         ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 20) {
                 Picker("Range", selection: $range.animation(.smooth)) {
                     ForEach(InsightsRange.allCases) { Text($0.rawValue).tag($0) }
                 }
                 .pickerStyle(.segmented)
+                .frame(maxWidth: isRegular ? 480 : .infinity)
 
                 headline(stats)
 
@@ -38,27 +47,60 @@ struct InsightDetailView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 40)
                 } else {
-                    ChartCard(title: chartTitle) { mainChart(stats, events: scopedEvents) }
-                    secondaryContent(stats)
+                    mainChart(stats, events: scopedEvents)
                 }
 
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("About \(metric.title)")
-                        .font(.title3.weight(.semibold))
-                    Text(metric.about)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
+                LazyVGrid(
+                    columns: [GridItem(.adaptive(minimum: isRegular ? 360 : 300), spacing: 16, alignment: .top)],
+                    alignment: .leading,
+                    spacing: 16
+                ) {
+                    if !scopedEvents.isEmpty {
+                        DetailSection(title: "Highlights") {
+                            VStack(alignment: .leading, spacing: 10) {
+                                ForEach(highlights(stats), id: \.self) { line in
+                                    Label {
+                                        Text(line).fixedSize(horizontal: false, vertical: true)
+                                    } icon: {
+                                        Image(systemName: metric.symbol).foregroundStyle(metric.tint)
+                                    }
+                                    .font(.subheadline)
+                                }
+                            }
+                        }
+                        secondaryContent(stats)
+                    }
+
+                    DetailSection(title: "About \(metric.title)") {
+                        Text(metric.about)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+
+                    DetailSection(title: "Options") {
+                        Toggle(isOn: Binding(
+                            get: { isPinned },
+                            set: { _ in withAnimation { pinnedRaw = PinnedMetrics.toggling(metric, in: pinnedRaw) } }
+                        )) {
+                            Label("Pin in Insights", systemImage: "pin.fill")
+                        }
+                    }
                 }
-                .padding()
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(.card, in: .rect(cornerRadius: 20))
             }
             .padding()
         }
         .background(Color(.systemGroupedBackground))
         .navigationTitle(metric.title)
         .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .primaryAction) {
+                Button(isPinned ? "Unpin" : "Pin", systemImage: isPinned ? "pin.fill" : "pin") {
+                    withAnimation { pinnedRaw = PinnedMetrics.toggling(metric, in: pinnedRaw) }
+                }
+            }
+        }
+        .sensoryFeedback(.selection, trigger: isPinned)
         .sheet(isPresented: $showFullMap) {
             NavigationStack {
                 FieldMapView(points: stats.mapPoints)
@@ -102,68 +144,57 @@ struct InsightDetailView: View {
         case .infestation: ("AVERAGE", stats.infestationRate.percentText, "infested")
         case .leafHealth: ("TOTAL", stats.totalLeaves.formatted(), "leaves")
         case .scans: ("TOTAL", stats.scanCount.formatted(), "scans")
-        case .fields: ("HIGHEST", stats.fieldRates.first.map { $0.rate.percentText } ?? "—", stats.fieldRates.first?.field ?? "")
-        case .accuracy: ("F1-SCORE", stats.validation.f1.map(\.percentText) ?? "—", "\(stats.validation.total) verified")
+        case .fields: ("HIGHEST", stats.fieldRates.first.map { $0.rate.percentText } ?? "—", "infested")
+        case .accuracy: ("F1-SCORE", stats.validation.f1.map(\.percentText) ?? "—", "")
         case .confidence: ("AVERAGE", stats.meanConfidence.map(\.percentText) ?? "—", "confidence")
         case .performance: ("AVERAGE", stats.averageFPS.map { $0.fixed(1) } ?? "—", "FPS")
         }
     }
 
-    // MARK: - Charts
-
-    private var chartTitle: String {
-        switch metric {
-        case .infestation: "Infestation over time"
-        case .leafHealth: "Leaves by class"
-        case .scans: "Scans by severity"
-        case .fields: "Infestation by field"
-        case .accuracy: "Confusion matrix"
-        case .confidence: "Confidence distribution"
-        case .performance: "Average FPS per session"
-        }
-    }
+    // MARK: - Main chart (full width, straight on the page like Health)
 
     @ViewBuilder
     private func mainChart(_ stats: InsightsStats, events: [DetectionEvent]) -> some View {
         switch metric {
         case .infestation:
-            InfestationTrendChart(trend: stats.trend, unit: range.bucket)
+            InfestationTrendChart(trend: stats.trend, unit: range.bucket, height: chartHeight)
         case .leafHealth:
-            DailyDetectionsChart(counts: stats.classCounts, unit: range.bucket)
+            DailyDetectionsChart(counts: stats.classCounts, unit: range.bucket, height: chartHeight)
         case .scans:
             ScanActivityChart(buckets: ScanActivityChart.buckets(for: events, unit: range.bucket), unit: range.bucket)
-                .frame(height: 240)
+                .frame(height: chartHeight)
         case .fields:
-            FieldRatesChart(fields: stats.fieldRates)
+            FieldRatesChart(fields: stats.fieldRates, color: metric.tint)
         case .accuracy:
             ValidationMatrixView(metrics: stats.validation)
+                .padding()
+                .background(.card, in: .rect(cornerRadius: 20))
         case .confidence:
-            ConfidenceHistogramChart(bins: stats.confidenceBins)
+            ConfidenceHistogramChart(bins: stats.confidenceBins, height: chartHeight)
         case .performance:
-            SessionPerformanceChart(sessions: stats.sessions, target: fpsTarget)
+            SessionPerformanceChart(sessions: stats.sessions, target: fpsTarget, color: metric.tint, height: chartHeight)
         }
     }
+
+    // MARK: - Related charts
 
     @ViewBuilder
     private func secondaryContent(_ stats: InsightsStats) -> some View {
         switch metric {
         case .infestation:
-            ChartCard(title: "Scan severity") { SeverityBreakdownChart(counts: stats.severityCounts) }
+            DetailSection(title: "Scan Severity") { SeverityBreakdownChart(counts: stats.severityCounts) }
             if let severity = stats.overallSeverity {
                 RecommendationCard(severity: severity, context: "Guidance for this period")
             }
         case .leafHealth:
-            ChartCard(title: "Share of leaves") { LeafHealthDonut(aphid: stats.aphidLeaves, healthy: stats.healthyLeaves) }
+            DetailSection(title: "Share of Leaves") { LeafHealthDonut(aphid: stats.aphidLeaves, healthy: stats.healthyLeaves) }
         case .scans:
-            LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
-                StatTile(title: "Sessions", value: stats.sessions.count.formatted(), symbol: "timer")
-                StatTile(title: "Leaves per scan", value: stats.scanCount == 0 ? "—" : (Double(stats.totalLeaves) / Double(stats.scanCount)).fixed(1), symbol: "leaf")
-            }
+            DetailSection(title: "Scan Severity") { SeverityBreakdownChart(counts: stats.severityCounts) }
         case .fields:
             if !stats.mapPoints.isEmpty {
-                ChartCard(title: "Hotspots", subtitle: "Geotagged scans colored by severity") {
+                DetailSection(title: "Hotspots") {
                     FieldMapView(points: stats.mapPoints, interactive: false)
-                        .frame(height: 240)
+                        .frame(height: isRegular ? 300 : 220)
                         .clipShape(.rect(cornerRadius: 16))
                         .onTapGesture { showFullMap = true }
                         .accessibilityAddTraits(.isButton)
@@ -171,21 +202,104 @@ struct InsightDetailView: View {
                 }
             }
         case .accuracy:
-            if stats.validation.total == 0 {
-                Label("Open a scan in History and mark each detection as correct or wrong to measure accuracy in the field.", systemImage: "info.circle")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .padding()
-                    .background(.card, in: .rect(cornerRadius: 20))
-            }
-        case .confidence:
             EmptyView()
+        case .confidence:
+            DetailSection(title: "By Class") {
+                HStack(spacing: 12) {
+                    ForEach(LeafClass.allCases) { leafClass in
+                        VStack(alignment: .leading, spacing: 2) {
+                            Label(leafClass.displayName, systemImage: leafClass.symbol)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            Text(stats.meanConfidenceByClass[leafClass].map(\.percentText) ?? "—")
+                                .font(.title3.weight(.semibold).monospacedDigit())
+                        }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                }
+            }
         case .performance:
             let passing = stats.sessions.filter { $0.fps >= fpsTarget }.count
-            LazyVGrid(columns: [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)], spacing: 12) {
-                StatTile(title: "Met target", value: "\(passing)/\(stats.sessions.count)", detail: "≥ \(fpsTarget.fixed(0)) FPS", symbol: "checkmark.circle")
-                StatTile(title: "Mean inference", value: "\(stats.averageInferenceMs.fixed(1)) ms", detail: "Per logged scan", symbol: "cpu")
+            DetailSection(title: "Summary") {
+                HStack(spacing: 12) {
+                    detailStat("Met target", "\(passing)/\(stats.sessions.count)", caption: "≥ \(fpsTarget.fixed(0)) FPS")
+                    detailStat("Mean inference", "\(stats.averageInferenceMs.fixed(1)) ms", caption: "Per logged scan")
+                }
             }
         }
+    }
+
+    private func detailStat(_ title: String, _ value: String, caption: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Text(title).font(.caption).foregroundStyle(.secondary)
+            Text(value).font(.title3.weight(.semibold).monospacedDigit())
+            Text(caption).font(.caption2).foregroundStyle(.tertiary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    // MARK: - Highlights
+
+    private func highlights(_ stats: InsightsStats) -> [String] {
+        let format = range.bucket.dateFormat
+        switch metric {
+        case .infestation:
+            var lines: [String] = []
+            let populated = stats.trend.filter { $0.total > 0 }
+            if let peak = populated.max(by: { $0.rate < $1.rate }) {
+                lines.append("Highest was \(peak.rate.percentText) on \(peak.date.formatted(format)).")
+            }
+            if let low = populated.min(by: { $0.rate < $1.rate }), populated.count > 1 {
+                lines.append("Lowest was \(low.rate.percentText) on \(low.date.formatted(format)).")
+            }
+            return lines
+        case .leafHealth:
+            let healthyShare = stats.totalLeaves == 0 ? 0 : Double(stats.healthyLeaves) / Double(stats.totalLeaves)
+            return ["\(healthyShare.percentText) of \(stats.totalLeaves) detected leaves were healthy.",
+                    "\(stats.aphidLeaves) leaves showed aphid damage."]
+        case .scans:
+            guard let busiest = stats.trend.max(by: { $0.scans < $1.scans }) else { return [] }
+            return ["Most scans were logged on \(busiest.date.formatted(format)) (\(busiest.scans)).",
+                    "\(stats.sessions.count) scanning sessions in this range."]
+        case .fields:
+            guard let worst = stats.fieldRates.first else { return [] }
+            var lines = ["\(worst.field) has the highest infestation at \(worst.rate.percentText)."]
+            if let best = stats.fieldRates.last, stats.fieldRates.count > 1 {
+                lines.append("\(best.field) is lowest at \(best.rate.percentText).")
+            }
+            return lines
+        case .accuracy:
+            let validation = stats.validation
+            guard validation.total > 0, let precision = validation.precision, let recall = validation.recall else {
+                return ["No verified detections yet. Open a scan in History and mark each detection correct or wrong."]
+            }
+            return ["Precision is \(precision.percentText) and recall is \(recall.percentText) across \(validation.total) verified detections.",
+                    "\(validation.falseNegatives) infested leaves were missed and \(validation.falsePositives) healthy leaves were flagged."]
+        case .confidence:
+            guard let mean = stats.meanConfidence else { return [] }
+            return ["Average confidence was \(mean.percentText) across \(stats.totalLeaves) boxes."]
+        case .performance:
+            guard let fastest = stats.sessions.max(by: { $0.fps < $1.fps }) else { return [] }
+            let passing = stats.sessions.filter { $0.fps >= fpsTarget }.count
+            return ["\(passing) of \(stats.sessions.count) sessions met the \(fpsTarget.fixed(0)) FPS target.",
+                    "Fastest session averaged \(fastest.fps.fixed(1)) FPS in \(fastest.field)."]
+        }
+    }
+}
+
+/// A titled card in the Health-style detail layout.
+private struct DetailSection<Content: View>: View {
+    let title: String
+    @ViewBuilder var content: Content
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(title)
+                .font(.headline)
+            content
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.card, in: .rect(cornerRadius: 20))
     }
 }

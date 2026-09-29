@@ -30,6 +30,8 @@ struct ContentView: View {
                 DeveloperView()
             }
         }
+        // iPad shows a sidebar that can collapse into a tab bar; iPhone keeps the floating tab bar.
+        .tabViewStyle(.sidebarAdaptable)
         .tabBarMinimizeBehavior(.onScrollDown)
         // MapKit resets the window tint to system blue; pin the brand green explicitly.
         .tint(Color("AccentColor"))
