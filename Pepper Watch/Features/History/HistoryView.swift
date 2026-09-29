@@ -40,11 +40,11 @@ struct HistoryView: View {
     @Query(sort: \DetectionEvent.timestamp, order: .reverse) private var events: [DetectionEvent]
     @Query(sort: \Field.name) private var fields: [Field]
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.widgetSync) private var widgetSync
     @Environment(\.systemLogger) private var logger
     @AppStorage("history.thumbnailLevel") private var thumbnailLevel = 2
     @State private var filter: HistoryFilter = .all
     @State private var fieldFilterID = ""
-    @State private var selectedDay: Date?
     @State private var isSelecting = false
     @State private var selection: Set<UUID> = []
     @State private var pendingDeletion: [DetectionEvent] = []
@@ -59,18 +59,13 @@ struct HistoryView: View {
         Self.thumbnailSizes[min(max(thumbnailLevel, 0), Self.thumbnailSizes.count - 1)]
     }
 
-    /// Events matching the filter menu and search, before the chart's day selection.
-    private var matchingEvents: [DetectionEvent] {
+    /// Events matching the filter menu.
+    private var visibleEvents: [DetectionEvent] {
         events.filter { event in
             guard filter.includes(event) else { return false }
             if !fieldFilterID.isEmpty, event.field?.id.uuidString != fieldFilterID { return false }
             return true
         }
-    }
-
-    private var visibleEvents: [DetectionEvent] {
-        guard let selectedDay else { return matchingEvents }
-        return matchingEvents.filter { Calendar.current.isDate($0.timestamp, inSameDayAs: selectedDay) }
     }
 
     private var groupedByDay: [(day: Date, events: [DetectionEvent])] {
@@ -81,20 +76,13 @@ struct HistoryView: View {
     var body: some View {
         NavigationStack(path: $path) {
             ScrollView {
-                VStack(spacing: 12) {
-                    if !events.isEmpty, !isSelecting {
-                        TipView(PinchGridTip())
-                            .padding(.horizontal)
-                        activityCard
-                            .padding(.horizontal)
-                    }
-                    grid
-                }
+                grid
                 // Photos-style pinch: the content follows the fingers, then settles at the new size.
                 // Scaling inside the scroll view keeps the large title and anchors the zoom in the content.
                 .scaleEffect(pinchScale, anchor: pinchAnchor)
                 .simultaneousGesture(pinchToResize)
             }
+            .refreshable { await refresh() }
             .background(Color(.systemGroupedBackground))
             .sensoryFeedback(.selection, trigger: thumbnailLevel)
             .navigationTitle(isSelecting ? (selection.isEmpty ? "Select Items" : "\(selection.count) Selected") : "History")
@@ -139,45 +127,6 @@ struct HistoryView: View {
                 Text("Images and detections will be removed from this device. This can't be undone.")
             }
         }
-    }
-
-    // MARK: - Activity chart
-
-    private var activityCard: some View {
-        let monthStart = Calendar.current.date(byAdding: .day, value: -29, to: Calendar.current.startOfDay(for: .now)) ?? .distantPast
-        let recent = matchingEvents.filter { $0.timestamp >= monthStart }
-        return VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("Activity")
-                    .font(.headline)
-                Spacer()
-                if let selectedDay {
-                    Button {
-                        withAnimation(.snappy) { self.selectedDay = nil }
-                    } label: {
-                        Label(selectedDay.formatted(.dateTime.month(.abbreviated).day()), systemImage: "xmark.circle.fill")
-                            .font(.caption.weight(.semibold))
-                    }
-                    .buttonStyle(.glass)
-                    .accessibilityLabel("Clear day filter")
-                }
-            }
-            if recent.isEmpty {
-                Text("No scans in the last 30 days.")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-                    .frame(height: 60)
-            } else {
-                ScanActivityChart(
-                    buckets: ScanActivityChart.buckets(for: recent, unit: .day),
-                    unit: .day,
-                    selection: $selectedDay
-                )
-                .frame(height: 150)
-            }
-        }
-        .padding()
-        .background(.card, in: .rect(cornerRadius: 20))
     }
 
     // MARK: - Grid
@@ -327,11 +276,22 @@ struct HistoryView: View {
                 } label: {
                     Label("Filter", systemImage: filter == .all && fieldFilterID.isEmpty ? "line.3.horizontal.decrease" : "line.3.horizontal.decrease.circle.fill")
                 }
+                .popoverTip(events.isEmpty ? nil : PinchGridTip())
             }
         }
     }
 
     // MARK: - Actions
+
+    /// Pull to refresh: rebuilds thumbnails that are missing from the full image and updates widgets.
+    private func refresh() async {
+        for event in events where event.thumbnailData == nil {
+            guard let data = event.imageData, let image = await ImageEncoder.uprightImage(from: data) else { continue }
+            event.thumbnailData = await ImageEncoder.encode(image).thumbnail
+        }
+        try? modelContext.save()
+        widgetSync?.update()
+    }
 
     private func toggleSelection(_ event: DetectionEvent) {
         if selection.contains(event.id) {
@@ -363,7 +323,8 @@ private struct DayHeader: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 10)
             .padding(.vertical, 8)
-            .background(.bar)
+            // Same as the page, so pinned dates blend in (black in Dark Mode).
+            .background(Color(.systemGroupedBackground))
     }
 }
 

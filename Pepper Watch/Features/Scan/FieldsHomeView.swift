@@ -22,6 +22,7 @@ struct FieldsHomeView: View {
     @Environment(GeofenceService.self) private var geofence
     @Environment(\.modelContext) private var modelContext
     @Environment(\.systemLogger) private var logger
+    @Environment(\.widgetSync) private var widgetSync
     @Environment(\.openURL) private var openURL
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Query(sort: \DetectionEvent.timestamp, order: .reverse) private var events: [DetectionEvent]
@@ -58,18 +59,16 @@ struct FieldsHomeView: View {
                         // Stretch the card to the row height so it lines up with the map.
                         recommendationCard
                             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-                            .background(.card, in: .rect(cornerRadius: 24))
-                        FieldsOverviewMap(fields: fields, activity: activity)
+                            .glassEffect(.regular, in: .rect(cornerRadius: 24))
+                        mapCard
                             .frame(maxWidth: .infinity, minHeight: 260, maxHeight: .infinity)
-                            .clipShape(.rect(cornerRadius: 24))
                     }
                     .fixedSize(horizontal: false, vertical: true)
                 } else {
                     recommendationCard
-                        .background(.card, in: .rect(cornerRadius: 24))
-                    FieldsOverviewMap(fields: fields, activity: activity)
-                        .frame(height: 200)
-                        .clipShape(.rect(cornerRadius: 24))
+                        .glassEffect(.regular, in: .rect(cornerRadius: 24))
+                    mapCard
+                        .frame(height: 212)
                 }
 
                 Text("Your Fields")
@@ -100,7 +99,9 @@ struct FieldsHomeView: View {
             }
             .padding()
         }
-        .background(Color(.systemGroupedBackground))
+        .refreshable { await refresh() }
+        // A subtle multicolor wash behind the glass cards, like the Insights summary on iPad.
+        .summaryGradientBackground()
         .navigationTitle("Fields")
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
@@ -129,25 +130,6 @@ struct FieldsHomeView: View {
     private var recommendationCard: some View {
         let regions = fields.map(\.region)
         VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 8) {
-                Image(systemName: "location.fill")
-                    .foregroundStyle(.tint)
-                VStack(alignment: .leading, spacing: 0) {
-                    Text("Current Location")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                    Text(locationTitle)
-                        .font(.headline)
-                        .lineLimit(1)
-                }
-                Spacer()
-                if let accuracy = location.lastLocation?.horizontalAccuracy, accuracy >= 0 {
-                    Text("±\(accuracy.distanceText)")
-                        .font(.caption.monospacedDigit())
-                        .foregroundStyle(.secondary)
-                }
-            }
-
             if location.isDenied {
                 Text("Turn on location access to find the field you're standing in and verify scans.")
                     .font(.subheadline)
@@ -221,12 +203,19 @@ struct FieldsHomeView: View {
         .animation(.smooth, value: location.lastLocation == nil)
     }
 
-    private var locationTitle: String {
-        if let placeName = location.placeName { return placeName }
-        if let coordinate = location.lastLocation?.coordinate {
-            return "\(coordinate.latitude.fixed(4)), \(coordinate.longitude.fixed(4))"
-        }
-        return location.isDenied ? "Location unavailable" : "Locating…"
+    /// The fields map inset in a Liquid Glass bezel.
+    private var mapCard: some View {
+        FieldsOverviewMap(fields: fields, activity: activity)
+            .clipShape(.rect(cornerRadius: 18))
+            .padding(6)
+            .glassEffect(.regular, in: .rect(cornerRadius: 24))
+    }
+
+    /// Pull to refresh: takes a fresh location fix, rechecks field boundaries and updates widgets.
+    private func refresh() async {
+        await location.refresh()
+        await geofence.sync(fields.map(\.region))
+        widgetSync?.update()
     }
 
     private func delete(_ field: Field, includingScans: Bool) {
@@ -313,7 +302,6 @@ private struct FieldCard: View {
 
             HStack {
                 if let latest {
-                    SeverityBadge(severity: latest.severity, compact: true)
                     Label {
                         Text(latest.timestamp, format: .relative(presentation: .named))
                     } icon: {
