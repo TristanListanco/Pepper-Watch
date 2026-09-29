@@ -67,6 +67,7 @@ struct AppRootView: View {
             .environment(services.geofence)
             .environment(services.deviceMonitor)
             .environment(\.systemLogger, services.logger)
+            .environment(\.widgetSync, services.widgetSync)
             .modelContainer(services.container)
             .task { await services.engine.configure(AppSettings.detectorConfiguration) }
             .task { services.widgetSync.start() }

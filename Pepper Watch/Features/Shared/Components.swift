@@ -148,3 +148,69 @@ extension ShapeStyle where Self == Color {
         })
     }
 }
+
+// MARK: - Summary gradient and glass cards
+
+/// Soft green, teal and warm tones fading into the page, echoing the app's palette.
+struct SummaryGradient: View {
+    var body: some View {
+        MeshGradient(
+            width: 3,
+            height: 3,
+            points: [
+                [0, 0], [0.5, 0], [1, 0],
+                [0, 0.5], [0.55, 0.45], [1, 0.5],
+                [0, 1], [0.5, 1], [1, 1],
+            ],
+            colors: [
+                Color("AccentColor").opacity(0.55), .teal.opacity(0.45), .orange.opacity(0.4),
+                Color("AccentColor").opacity(0.3), .teal.opacity(0.25), .orange.opacity(0.2),
+                .clear, .clear, .clear,
+            ]
+        )
+        .mask(LinearGradient(colors: [.black, .black.opacity(0.6), .clear], startPoint: .top, endPoint: .bottom))
+        .accessibilityHidden(true)
+    }
+}
+
+/// A grouped page with a subtle multicolor wash across the top, like the Health summary page.
+private struct SummaryGradientBackground: ViewModifier {
+    let isVisible: Bool
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+
+    func body(content: Content) -> some View {
+        content.background {
+            if isVisible {
+                ZStack(alignment: .top) {
+                    Color(.systemGroupedBackground)
+                    SummaryGradient()
+                        .frame(height: horizontalSizeClass == .regular ? 520 : 400)
+                }
+                .ignoresSafeArea()
+            }
+        }
+    }
+}
+
+/// Liquid Glass over a summary gradient; a solid card elsewhere.
+private struct CardSurface: ViewModifier {
+    let isGlass: Bool
+
+    func body(content: Content) -> some View {
+        if isGlass {
+            content.glassEffect(.regular, in: .rect(cornerRadius: 24))
+        } else {
+            content.background(.card, in: .rect(cornerRadius: 20))
+        }
+    }
+}
+
+extension View {
+    func summaryGradientBackground(isVisible: Bool = true) -> some View {
+        modifier(SummaryGradientBackground(isVisible: isVisible))
+    }
+
+    func cardSurface(isGlass: Bool) -> some View {
+        modifier(CardSurface(isGlass: isGlass))
+    }
+}
