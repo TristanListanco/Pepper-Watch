@@ -112,6 +112,8 @@ struct InsightsView: View {
     @Environment(\.modelContext) private var modelContext
     @AppStorage("insights.fieldID") private var selectedFieldID = ""
     @AppStorage("insights.showAllMetrics") private var showAllMetrics = false
+    @AppStorage(PinnedMetrics.key) private var pinnedRaw = PinnedMetrics.defaultValue
+    @State private var isEditingPinned = false
     @State private var narrator = InsightNarrator()
     @State private var path: [InsightMetric] = Self.initialPath
 
@@ -150,6 +152,9 @@ struct InsightsView: View {
             .navigationSubtitle(selectedField?.name ?? "All Fields")
             .navigationDestination(for: InsightMetric.self) { metric in
                 InsightDetailView(metric: metric, fieldID: selectedField?.id)
+            }
+            .sheet(isPresented: $isEditingPinned) {
+                EditPinnedMetricsView()
             }
             .toolbar {
                 ToolbarItem(placement: .primaryAction) {
@@ -202,7 +207,8 @@ struct InsightsView: View {
         let latest = scopedEvents.last
         let facts = InsightDigest.facts(current: current, previous: previous, scope: selectedField?.name ?? "all fields", latest: latest)
         let fallback = InsightDigest.fallback(current: current, previous: previous, latest: latest)
-        let visibleMetrics = showAllMetrics ? InsightMetric.allCases : Array(InsightMetric.allCases.prefix(4))
+        let pinned = PinnedMetrics.decode(pinnedRaw)
+        let others = InsightMetric.allCases.filter { !pinned.contains($0) }
 
         return ScrollView {
             VStack(alignment: .leading, spacing: 12) {
@@ -211,51 +217,192 @@ struct InsightsView: View {
                     narrator.refresh(facts: facts, force: true)
                 }
 
-                SectionHeader(title: "Summary", detail: "Past 7 days")
-                    .padding(.top, 8)
-                ForEach(visibleMetrics) { metric in
-                    NavigationLink(value: metric) {
-                        InsightSummaryCard(metric: metric, current: current, previous: previous)
-                    }
-                    .buttonStyle(.plain)
-                    .transition(.opacity.combined(with: .move(edge: .top)))
+                SectionHeader(title: "Pinned", detail: "Past 7 days", actionTitle: "Edit") {
+                    isEditingPinned = true
+                }
+                .padding(.top, 8)
+
+                if pinned.isEmpty {
+                    Label("Pin the metrics you check most. Tap Edit or long-press a metric below.", systemImage: "pin")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .padding()
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(.card, in: .rect(cornerRadius: 20))
+                } else {
+                    metricGrid(pinned, current: current)
                 }
 
-                Button {
-                    withAnimation(.smooth) { showAllMetrics.toggle() }
-                } label: {
-                    HStack {
-                        Text(showAllMetrics ? "Show Less" : "Show All Metrics")
-                        Spacer()
-                        Image(systemName: showAllMetrics ? "chevron.up" : "chevron.down")
+                if !others.isEmpty {
+                    Button {
+                        withAnimation(.smooth) { showAllMetrics.toggle() }
+                    } label: {
+                        HStack {
+                            Text(showAllMetrics ? "Show Less" : "Show All Metrics")
+                            Spacer()
+                            Image(systemName: showAllMetrics ? "chevron.up" : "chevron.down")
+                        }
+                        .font(.body.weight(.medium))
+                        .padding()
+                        .frame(maxWidth: .infinity)
+                        .background(.card, in: .rect(cornerRadius: 20))
                     }
-                    .font(.body.weight(.medium))
-                    .padding()
-                    .frame(maxWidth: .infinity)
-                    .background(.card, in: .rect(cornerRadius: 20))
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.tint)
+
+                    if showAllMetrics {
+                        SectionHeader(title: "More Metrics")
+                            .padding(.top, 8)
+                        metricGrid(others, current: current)
+                            .transition(.opacity.combined(with: .move(edge: .top)))
+                    }
                 }
-                .buttonStyle(.plain)
-                .foregroundStyle(.tint)
             }
             .padding()
         }
         .task(id: facts) { narrator.refresh(facts: facts) }
+    }
+
+    /// One column on iPhone, two or more on iPad depending on the available width.
+    private func metricGrid(_ metrics: [InsightMetric], current: InsightsStats) -> some View {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 320, maximum: 640), spacing: 12)], spacing: 12) {
+            ForEach(metrics) { metric in
+                let isPinned = PinnedMetrics.decode(pinnedRaw).contains(metric)
+                NavigationLink(value: metric) {
+                    InsightSummaryCard(metric: metric, current: current)
+                }
+                .buttonStyle(.plain)
+                .contextMenu {
+                    Button(isPinned ? "Unpin" : "Pin", systemImage: isPinned ? "pin.slash" : "pin") {
+                        withAnimation(.smooth) { pinnedRaw = PinnedMetrics.toggling(metric, in: pinnedRaw) }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Ordered pinned metrics, persisted as a comma-separated list.
+enum PinnedMetrics {
+    static let key = "insights.pinnedMetrics"
+    static let defaultValue = encode([.infestation, .leafHealth, .scans, .fields])
+
+    static func decode(_ raw: String) -> [InsightMetric] {
+        var seen = Set<InsightMetric>()
+        return raw.split(separator: ",")
+            .compactMap { InsightMetric(rawValue: String($0)) }
+            .filter { seen.insert($0).inserted }
+    }
+
+    static func encode(_ metrics: [InsightMetric]) -> String {
+        metrics.map(\.rawValue).joined(separator: ",")
+    }
+
+    static func toggling(_ metric: InsightMetric, in raw: String) -> String {
+        var metrics = decode(raw)
+        if let index = metrics.firstIndex(of: metric) {
+            metrics.remove(at: index)
+        } else {
+            metrics.append(metric)
+        }
+        return encode(metrics)
+    }
+}
+
+/// Health-style editor for which metrics are pinned and in what order.
+struct EditPinnedMetricsView: View {
+    @AppStorage(PinnedMetrics.key) private var pinnedRaw = PinnedMetrics.defaultValue
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        let pinned = PinnedMetrics.decode(pinnedRaw)
+        let others = InsightMetric.allCases.filter { !pinned.contains($0) }
+        NavigationStack {
+            List {
+                Section {
+                    ForEach(pinned) { metric in
+                        MetricRow(metric: metric)
+                    }
+                    .onMove { source, destination in
+                        var reordered = pinned
+                        reordered.move(fromOffsets: source, toOffset: destination)
+                        pinnedRaw = PinnedMetrics.encode(reordered)
+                    }
+                    .onDelete { offsets in
+                        var remaining = pinned
+                        remaining.remove(atOffsets: offsets)
+                        pinnedRaw = PinnedMetrics.encode(remaining)
+                    }
+                } header: {
+                    Text("Pinned")
+                } footer: {
+                    Text("Pinned metrics appear first in Insights. Drag to reorder.")
+                }
+
+                if !others.isEmpty {
+                    Section("More Metrics") {
+                        ForEach(others) { metric in
+                            HStack(spacing: 12) {
+                                Button("Pin \(metric.title)", systemImage: "plus.circle.fill") {
+                                    withAnimation { pinnedRaw = PinnedMetrics.toggling(metric, in: pinnedRaw) }
+                                }
+                                .labelStyle(.iconOnly)
+                                .font(.title3)
+                                .foregroundStyle(.white, Severity.clear.color)
+                                .symbolRenderingMode(.palette)
+                                .buttonStyle(.plain)
+                                MetricRow(metric: metric)
+                            }
+                        }
+                    }
+                }
+            }
+            .environment(\.editMode, .constant(.active))
+            .navigationTitle("Edit Pinned")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done", systemImage: "checkmark") { dismiss() }
+                }
+            }
+        }
+    }
+}
+
+private struct MetricRow: View {
+    let metric: InsightMetric
+
+    var body: some View {
+        Label {
+            Text(metric.title)
+        } icon: {
+            Image(systemName: metric.symbol)
+                .foregroundStyle(metric.tint)
+        }
     }
 }
 
 private struct SectionHeader: View {
     let title: String
     var detail: String?
+    var actionTitle: String?
+    var action: (() -> Void)?
 
     var body: some View {
         HStack(alignment: .firstTextBaseline) {
-            Text(title)
-                .font(.title2.weight(.bold))
+            VStack(alignment: .leading, spacing: 0) {
+                Text(title)
+                    .font(.title2.weight(.bold))
+                if let detail {
+                    Text(detail)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+            }
             Spacer()
-            if let detail {
-                Text(detail)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+            if let actionTitle, let action {
+                Button(actionTitle, action: action)
+                    .font(.body.weight(.medium))
             }
         }
         .padding(.horizontal, 4)
@@ -297,10 +444,15 @@ private struct HighlightsCard: View {
                 }
             }
 
-            Text(content.headline ?? " ")
-                .font(.title3.weight(.semibold))
-                .redacted(reason: content.headline == nil ? .placeholder : [])
-                .contentTransition(.opacity)
+            if let headline = content.headline {
+                Text(headline)
+                    .font(.title3.weight(.semibold))
+                    .contentTransition(.opacity)
+            } else {
+                Text("Summarizing your scans…")
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(.secondary)
+            }
 
             VStack(alignment: .leading, spacing: 8) {
                 ForEach(Array(content.observations.enumerated()), id: \.offset) { _, observation in
@@ -365,7 +517,6 @@ private extension InsightNarrator.Phase {
 struct InsightSummaryCard: View {
     let metric: InsightMetric
     let current: InsightsStats
-    let previous: InsightsStats
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -384,11 +535,6 @@ struct InsightSummaryCard: View {
 
             HStack(alignment: .bottom, spacing: 12) {
                 VStack(alignment: .leading, spacing: 2) {
-                    if let detail {
-                        Text(detail)
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
                     HStack(alignment: .firstTextBaseline, spacing: 4) {
                         Text(value)
                             .font(.system(.title, design: .rounded).weight(.semibold))
@@ -435,36 +581,12 @@ struct InsightSummaryCard: View {
     private var unit: String {
         switch metric {
         case .infestation: "infested"
-        case .leafHealth: "healthy leaves"
+        case .leafHealth: "healthy"
         case .scans: current.scanCount == 1 ? "scan" : "scans"
-        case .fields: current.fieldRates.first?.field ?? ""
+        case .fields: "highest"
         case .accuracy: "F1-score"
         case .confidence: "average"
         case .performance: "FPS"
-        }
-    }
-
-    /// Change from the previous 7 days, like Health's trend line.
-    private var detail: String? {
-        switch metric {
-        case .infestation:
-            guard previous.totalLeaves > 0 else { return nil }
-            let change = (current.infestationRate - previous.infestationRate) * 100
-            if abs(change) < 1 { return "Same as last week" }
-            return "\(change > 0 ? "▲" : "▼") \(abs(change).fixed(0)) pts vs last week"
-        case .leafHealth:
-            return "\(current.aphidLeaves) infested"
-        case .scans:
-            guard previous.scanCount > 0 else { return nil }
-            return "\(previous.scanCount) the week before"
-        case .fields:
-            return current.fieldRates.isEmpty ? nil : "Highest infestation"
-        case .accuracy:
-            return current.validation.total == 0 ? "Verify detections in History" : "\(current.validation.total) verified"
-        case .confidence:
-            return "\(current.totalLeaves) boxes"
-        case .performance:
-            return "Target ≥ 17 FPS"
         }
     }
 
@@ -482,7 +604,7 @@ struct InsightSummaryCard: View {
         case .scans:
             MiniBarChart(points: current.trend.map { MiniPoint(date: $0.date, value: Double($0.scans)) }, color: metric.tint)
         case .fields:
-            MiniRankBars(fields: current.fieldRates)
+            MiniRankBars(fields: current.fieldRates, color: metric.tint)
         case .accuracy:
             HStack {
                 Spacer()
