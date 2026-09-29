@@ -1,0 +1,316 @@
+//
+//  ScanModel.swift
+//  Pepper Watch
+//
+
+import AVFoundation
+import CoreLocation
+import Observation
+import SwiftData
+
+struct PerformanceSample: Identifiable, Equatable {
+    var id: Date { date }
+    let date: Date
+    let fps: Double
+    let latencyMs: Double
+}
+
+/// Live scanning state: camera lifecycle, smoothed metrics, auto-logging and session records.
+@Observable
+final class ScanModel {
+    enum Status: Equatable {
+        case idle
+        case requestingPermission
+        case denied
+        case unavailable(String)
+        case starting
+        case running
+    }
+
+    private(set) var status: Status = .idle
+    private(set) var detections: [Detection] = []
+    private(set) var imageSize: CGSize = .zero
+    private(set) var summary = DetectionSummary()
+    /// Severity only changes after it holds for several frames, so guidance and haptics don't flicker.
+    private(set) var stableSeverity: Severity?
+    private(set) var fps: Double = 0
+    private(set) var inferenceMs: Double = 0
+    private(set) var isPaused = false
+    private(set) var isTorchOn = false
+    private(set) var zoom: Double = 1
+    private(set) var capabilities = CameraCapabilities()
+    private(set) var captureDevice: AVCaptureDevice?
+    private(set) var performanceSamples: [PerformanceSample] = []
+    private(set) var sessionStartedAt: Date?
+    private(set) var eventsLoggedThisSession = 0
+    private(set) var snapshotCount = 0
+
+    let camera = CameraService()
+
+    @ObservationIgnored private let context: ModelContext
+    @ObservationIgnored private let engine: DetectionEngine
+    @ObservationIgnored private let logger: SystemLogger
+    @ObservationIgnored private let location: LocationProvider
+    @ObservationIgnored private var backgroundTasks: [Task<Void, Never>] = []
+    @ObservationIgnored private var isActive = false
+    @ObservationIgnored private var latestFrame: FrameResult?
+    @ObservationIgnored private var lastFrameAt: ContinuousClock.Instant?
+    @ObservationIgnored private var lastAutoLogAt = Date.distantPast
+    @ObservationIgnored private var lastHealthLogAt = Date.distantPast
+    @ObservationIgnored private var severityCandidate: Severity?
+    @ObservationIgnored private var severityCandidateFrames = 0
+
+    // Current session accumulators.
+    @ObservationIgnored private var session: ScanSession?
+    @ObservationIgnored private var frameCount = 0
+    @ObservationIgnored private var activeSeconds = 0.0
+    @ObservationIgnored private var inferenceTotalMs = 0.0
+    @ObservationIgnored private var peakAphidCount = 0
+
+    init(context: ModelContext, engine: DetectionEngine, logger: SystemLogger, location: LocationProvider) {
+        self.context = context
+        self.engine = engine
+        self.logger = logger
+        self.location = location
+
+        let camera = camera
+        backgroundTasks = [
+            Task { [weak self] in
+                for await frame in camera.frames {
+                    self?.handle(frame)
+                }
+            },
+            Task {
+                for await detector in Observations({ engine.detector }) {
+                    camera.setDetector(detector)
+                }
+            },
+            Task { [weak self] in
+                for await _ in NotificationCenter.default.notifications(named: ProcessInfo.thermalStateDidChangeNotification) {
+                    self?.logThermalChange()
+                }
+            },
+        ]
+    }
+
+    // MARK: - Lifecycle
+
+    func start() async {
+        isActive = true
+        guard status != .running, status != .starting else { return }
+
+        switch CameraService.authorizationStatus {
+        case .authorized:
+            break
+        case .notDetermined:
+            status = .requestingPermission
+            guard await CameraService.requestAccess() else {
+                status = .denied
+                return
+            }
+        default:
+            status = .denied
+            return
+        }
+        guard isActive else { status = .idle; return }
+
+        status = .starting
+        do {
+            capabilities = try await camera.configure(quality: AppSettings.captureQuality)
+            captureDevice = camera.device
+        } catch {
+            status = .unavailable(error.localizedDescription)
+            logger.log(.error, category: "camera", "Camera unavailable: \(error.localizedDescription)")
+            return
+        }
+        guard isActive else { status = .idle; return }
+
+        camera.setPaused(isPaused)
+        camera.start()
+        if isTorchOn { camera.setTorch(true) }
+        if AppSettings.geotagEnabled { location.start() }
+        beginSession()
+        status = .running
+        logger.log(category: "camera", "Scanning started in \(AppSettings.fieldName) (\(AppSettings.captureQuality.title))")
+    }
+
+    func stop() {
+        isActive = false
+        guard status == .running else { return }
+        camera.stop()
+        location.stop()
+        endSession()
+        status = .idle
+        detections = []
+        summary = DetectionSummary()
+        stableSeverity = nil
+        severityCandidate = nil
+        latestFrame = nil
+        lastFrameAt = nil
+        isTorchOn = false
+    }
+
+    func togglePause() {
+        isPaused.toggle()
+        camera.setPaused(isPaused)
+        lastFrameAt = nil
+        logger.log(category: "camera", isPaused ? "Inference paused" : "Inference resumed")
+    }
+
+    func toggleTorch() {
+        isTorchOn.toggle()
+        camera.setTorch(isTorchOn)
+    }
+
+    func setZoom(_ displayFactor: Double) {
+        zoom = displayFactor
+        camera.setZoom(displayFactor)
+    }
+
+    func captureRotationChanged(_ angle: CGFloat) {
+        camera.setCaptureRotation(angle)
+    }
+
+    /// Saves the most recently analyzed frame with its detections (thesis "Capture & Export Controls").
+    func captureSnapshot() {
+        guard let latestFrame else { return }
+        record(latestFrame, source: .snapshot)
+        snapshotCount += 1
+    }
+
+    // MARK: - Frames
+
+    private func handle(_ frame: FrameResult) {
+        guard status == .running, !isPaused else { return }
+
+        let now = ContinuousClock.now
+        if let lastFrameAt {
+            let seconds = lastFrameAt.duration(to: now) / .seconds(1)
+            if seconds > 0, seconds < 1 {
+                fps = fps == 0 ? 1 / seconds : fps * 0.85 + (1 / seconds) * 0.15
+                activeSeconds += seconds
+            }
+        }
+        lastFrameAt = now
+        inferenceMs = inferenceMs == 0 ? frame.inferenceMs : inferenceMs * 0.85 + frame.inferenceMs * 0.15
+
+        detections = frame.detections
+        imageSize = frame.imageSize
+        summary = DetectionSummary(frame.detections)
+        latestFrame = frame
+        updateStableSeverity(summary.severity)
+
+        frameCount += 1
+        inferenceTotalMs += frame.inferenceMs
+        peakAphidCount = max(peakAphidCount, summary.aphidCount)
+
+        recordPerformanceSample()
+        autoLogIfNeeded(frame)
+        healthLogIfNeeded()
+    }
+
+    private func updateStableSeverity(_ severity: Severity?) {
+        if severity == severityCandidate {
+            severityCandidateFrames += 1
+        } else {
+            severityCandidate = severity
+            severityCandidateFrames = 1
+        }
+        if severityCandidateFrames >= 5, stableSeverity != severity {
+            stableSeverity = severity
+        }
+    }
+
+    private func recordPerformanceSample() {
+        let now = Date.now
+        if let last = performanceSamples.last, now.timeIntervalSince(last.date) < 0.25 { return }
+        performanceSamples.append(PerformanceSample(date: now, fps: fps, latencyMs: inferenceMs))
+        if performanceSamples.count > 240 {
+            performanceSamples.removeFirst(performanceSamples.count - 240)
+        }
+    }
+
+    private func autoLogIfNeeded(_ frame: FrameResult) {
+        guard AppSettings.autoLogEnabled, !frame.detections.isEmpty else { return }
+        if AppSettings.autoLogRequiresAphids, summary.aphidCount == 0 { return }
+        guard Date.now.timeIntervalSince(lastAutoLogAt) >= AppSettings.autoLogInterval else { return }
+        lastAutoLogAt = .now
+        record(frame, source: .auto)
+    }
+
+    private func healthLogIfNeeded() {
+        guard Date.now.timeIntervalSince(lastHealthLogAt) >= AppSettings.healthLogInterval else { return }
+        lastHealthLogAt = .now
+        let fpsText = fps.formatted(.number.precision(.fractionLength(1)))
+        let latencyText = inferenceMs.formatted(.number.precision(.fractionLength(1)))
+        let level: LogLevel = fps > 0 && fps < AppSettings.fpsTarget ? .warning : .info
+        logger.log(level, category: "health", "\(fpsText) FPS · \(latencyText) ms inference · \(summary.totalLeaves) leaves in view", fps: fps)
+    }
+
+    private func logThermalChange() {
+        let level = ThermalLevel(ProcessInfo.processInfo.thermalState)
+        logger.log(level >= .serious ? .warning : .info, category: "thermal", "Thermal state changed to \(level.title)", fps: fps)
+    }
+
+    // MARK: - Persistence
+
+    private func record(_ frame: FrameResult, source: EventSource) {
+        let summary = DetectionSummary(frame.detections)
+        let event = DetectionEvent(
+            source: source,
+            fieldName: AppSettings.fieldName,
+            inferenceMs: frame.inferenceMs,
+            imageSize: frame.imageSize,
+            summary: summary
+        )
+        if AppSettings.geotagEnabled, let coordinate = location.lastLocation?.coordinate {
+            event.latitude = coordinate.latitude
+            event.longitude = coordinate.longitude
+        }
+        context.insert(event)
+        event.session = session
+        event.boxes = frame.detections.map(BoundingBox.init)
+        eventsLoggedThisSession += 1
+
+        Task {
+            let encoded = await ImageEncoder.encode(frame.frame)
+            event.imageData = encoded.image
+            event.thumbnailData = encoded.thumbnail
+            try? context.save()
+        }
+    }
+
+    private func beginSession() {
+        let session = ScanSession(fieldName: AppSettings.fieldName, computeUnits: engine.activeComputeUnits?.shortTitle ?? "—")
+        context.insert(session)
+        self.session = session
+        sessionStartedAt = session.startedAt
+        eventsLoggedThisSession = 0
+        frameCount = 0
+        activeSeconds = 0
+        inferenceTotalMs = 0
+        peakAphidCount = 0
+        fps = 0
+        inferenceMs = 0
+        lastHealthLogAt = .now
+    }
+
+    private func endSession() {
+        guard let session else { return }
+        session.endedAt = .now
+        session.framesProcessed = frameCount
+        session.averageFPS = activeSeconds > 0 ? Double(frameCount) / activeSeconds : 0
+        session.averageInferenceMs = frameCount > 0 ? inferenceTotalMs / Double(frameCount) : 0
+        session.peakAphidCount = peakAphidCount
+
+        if frameCount < 30, session.events.isEmpty {
+            context.delete(session)
+        } else {
+            let fpsText = session.averageFPS.formatted(.number.precision(.fractionLength(1)))
+            logger.log(category: "session", "Session ended: \(frameCount) frames, \(fpsText) FPS average, \(session.events.count) events logged", fps: session.averageFPS)
+        }
+        try? context.save()
+        self.session = nil
+        sessionStartedAt = nil
+    }
+}
