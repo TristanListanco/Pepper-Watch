@@ -25,14 +25,16 @@ enum CSVExporter {
     /// One row per bounding box, joined with its detection event.
     static func detections(_ events: [DetectionEvent]) -> CSVDocument {
         var lines = [
-            "event_id,timestamp,field,source,latitude,longitude,inference_ms,image_width,image_height,aphid_count,healthy_count,infestation_rate,severity,box_id,class,confidence,x,y,width,height,verdict",
+            "event_id,timestamp,field_id,field,geofence_verified,source,latitude,longitude,inference_ms,image_width,image_height,aphid_count,healthy_count,infestation_rate,severity,box_id,class,confidence,x,y,width,height,verdict",
         ]
         let iso = ISO8601DateFormatter()
         for event in events.sorted(by: { $0.timestamp < $1.timestamp }) {
             let eventColumns = [
                 event.id.uuidString,
                 iso.string(from: event.timestamp),
+                event.field?.id.uuidString ?? "",
                 escape(event.fieldName),
+                event.geofenceVerified.map { $0 ? "true" : "false" } ?? "",
                 event.source.rawValue,
                 event.latitude.map { String($0) } ?? "",
                 event.longitude.map { String($0) } ?? "",

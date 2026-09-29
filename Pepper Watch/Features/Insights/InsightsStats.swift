@@ -44,9 +44,10 @@ struct ValidationMetrics: Equatable {
 }
 
 struct InsightsStats {
-    struct DailyPoint: Identifiable {
-        var id: Date { day }
-        let day: Date
+    /// One time bucket (hour, day, week or month depending on the range).
+    struct TrendPoint: Identifiable {
+        var id: Date { date }
+        let date: Date
         var aphid = 0
         var healthy = 0
         var scans = 0
@@ -54,9 +55,9 @@ struct InsightsStats {
         var rate: Double { total == 0 ? 0 : Double(aphid) / Double(total) }
     }
 
-    struct DailyClassCount: Identifiable {
-        var id: String { "\(day.timeIntervalSince1970)-\(leafClass.rawValue)" }
-        let day: Date
+    struct ClassCount: Identifiable {
+        var id: String { "\(date.timeIntervalSince1970)-\(leafClass.rawValue)" }
+        let date: Date
         let leafClass: LeafClass
         let count: Int
     }
@@ -106,24 +107,32 @@ struct InsightsStats {
     var healthyLeaves = 0
     var latestSeverity: Severity?
     var averageInferenceMs: Double = 0
-    var daily: [DailyPoint] = []
-    var dailyClassCounts: [DailyClassCount] = []
+    var trend: [TrendPoint] = []
+    var classCounts: [ClassCount] = []
     var severityCounts: [SeverityCount] = []
     var confidenceBins: [ConfidenceBin] = []
     var fieldRates: [FieldRate] = []
     var sessions: [SessionPerformance] = []
     var mapPoints: [MapPoint] = []
     var validation = ValidationMetrics()
+    var meanConfidence: Double?
+    let bucket: Calendar.Component
 
     var totalLeaves: Int { aphidLeaves + healthyLeaves }
     var infestationRate: Double { totalLeaves == 0 ? 0 : Double(aphidLeaves) / Double(totalLeaves) }
     var overallSeverity: Severity? { DetectionSummary(aphidCount: aphidLeaves, healthyCount: healthyLeaves).severity }
+    var averageFPS: Double? {
+        sessions.isEmpty ? nil : sessions.reduce(0) { $0 + $1.fps } / Double(sessions.count)
+    }
 
-    init(events: [DetectionEvent], sessions: [ScanSession], calendar: Calendar = .current) {
+    init(events: [DetectionEvent], sessions: [ScanSession], bucket: Calendar.Component = .day, calendar: Calendar = .current) {
+        self.bucket = bucket
         scanCount = events.count
         latestSeverity = events.max(by: { $0.timestamp < $1.timestamp })?.severity
 
-        var byDay: [Date: DailyPoint] = [:]
+        var byBucket: [Date: TrendPoint] = [:]
+        var confidenceTotal = 0.0
+        var boxCount = 0
         var bySeverity: [Severity: Int] = [:]
         var byField: [String: (aphid: Int, total: Int)] = [:]
         var bins: [LeafClass: [Int: Int]] = [:]
@@ -134,12 +143,12 @@ struct InsightsStats {
             healthyLeaves += event.healthyCount
             inferenceTotal += event.inferenceMs
 
-            let day = calendar.startOfDay(for: event.timestamp)
-            var point = byDay[day] ?? DailyPoint(day: day)
+            let start = calendar.dateInterval(of: bucket, for: event.timestamp)?.start ?? calendar.startOfDay(for: event.timestamp)
+            var point = byBucket[start] ?? TrendPoint(date: start)
             point.aphid += event.aphidCount
             point.healthy += event.healthyCount
             point.scans += 1
-            byDay[day] = point
+            byBucket[start] = point
 
             if let severity = event.severity { bySeverity[severity, default: 0] += 1 }
 
@@ -148,6 +157,8 @@ struct InsightsStats {
             byField[field, default: (0, 0)].total += event.aphidCount + event.healthyCount
 
             for box in event.boxes {
+                confidenceTotal += box.confidence
+                boxCount += 1
                 let bin = min(Int(box.confidence * 10), 9)
                 bins[box.leafClass, default: [:]][bin, default: 0] += 1
                 if let verdict = box.verdict {
@@ -168,11 +179,12 @@ struct InsightsStats {
         }
 
         averageInferenceMs = events.isEmpty ? 0 : inferenceTotal / Double(events.count)
-        daily = byDay.values.sorted { $0.day < $1.day }
-        dailyClassCounts = daily.flatMap { point in
+        meanConfidence = boxCount == 0 ? nil : confidenceTotal / Double(boxCount)
+        trend = byBucket.values.sorted { $0.date < $1.date }
+        classCounts = trend.flatMap { point in
             [
-                DailyClassCount(day: point.day, leafClass: .aphidInfested, count: point.aphid),
-                DailyClassCount(day: point.day, leafClass: .healthy, count: point.healthy),
+                ClassCount(date: point.date, leafClass: .aphidInfested, count: point.aphid),
+                ClassCount(date: point.date, leafClass: .healthy, count: point.healthy),
             ]
         }
         severityCounts = Severity.allCases.map { SeverityCount(severity: $0, count: bySeverity[$0] ?? 0) }

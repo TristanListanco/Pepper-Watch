@@ -18,7 +18,7 @@ struct ContentView: View {
     var body: some View {
         TabView(selection: $selection) {
             Tab("Scan", systemImage: "camera.viewfinder", value: .scan) {
-                ScanView(isSelected: selection == .scan)
+                ScanTabView(isSelected: selection == .scan)
             }
             Tab("Insights", systemImage: "chart.bar.xaxis", value: .insights) {
                 InsightsView()
@@ -31,6 +31,8 @@ struct ContentView: View {
             }
         }
         .tabBarMinimizeBehavior(.onScrollDown)
+        // MapKit resets the window tint to system blue; pin the brand green explicitly.
+        .tint(Color("AccentColor"))
     }
 
     /// Debug builds accept `-PWInitialTab insights` for demos and screenshots.
@@ -48,6 +50,7 @@ struct ContentView: View {
         .environment(PreviewSupport.engine)
         .environment(PreviewSupport.scanner)
         .environment(PreviewSupport.location)
+        .environment(PreviewSupport.geofence)
         .environment(DeviceMonitor())
         .modelContainer(PreviewSupport.container)
 }
