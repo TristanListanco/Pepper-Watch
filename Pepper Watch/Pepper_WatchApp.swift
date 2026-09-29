@@ -13,6 +13,8 @@ struct Pepper_WatchApp: App {
     init() {
         AppSettings.registerDefaults()
         PepperWatchTips.configure()
+        // Activate WatchConnectivity at launch, including background launches the watch triggers.
+        AppServices.shared.watchSync.start()
     }
 
     var body: some Scene {
@@ -34,6 +36,7 @@ final class AppServices {
     let scanner: ScanModel
     let deviceMonitor = DeviceMonitor()
     let widgetSync: WidgetSync
+    let watchSync: WatchSync
 
     private init() {
         container = AppDataStore.container
@@ -51,7 +54,8 @@ final class AppServices {
         engine = DetectionEngine(logger: logger)
         geofence = GeofenceService(logger: logger)
         scanner = ScanModel(context: context, engine: engine, logger: logger, location: location, geofence: geofence)
-        widgetSync = WidgetSync(context: context)
+        watchSync = WatchSync(context: context)
+        widgetSync = WidgetSync(context: context, watch: watchSync)
     }
 }
 

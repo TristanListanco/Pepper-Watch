@@ -157,6 +157,12 @@ final class InsightNarrator {
         }
     }
 
+    /// The cached Apple Intelligence summary for `scope` when it still matches the numbers. Never generates.
+    static func cachedSummary(for insights: WeeklyInsights, scope: String) -> (content: HighlightContent, generatedAt: Date)? {
+        guard let cached = loadCache()[scope], cached.facts == insights.facts else { return nil }
+        return (cached.content, cached.generatedAt)
+    }
+
     private static func loadCache() -> [String: CachedReport] {
         guard let data = UserDefaults.standard.data(forKey: cacheKey),
               let cache = try? JSONDecoder().decode([String: CachedReport].self, from: data)
