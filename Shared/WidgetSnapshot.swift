@@ -49,10 +49,17 @@ nonisolated struct WidgetSnapshot: Codable, Sendable {
         var latestScan: Date?
         /// One entry per day with scans, covering the last 30 days.
         var daily: [DailyCount]
+        /// Field center and geofence radius, for the watch map. `nil` for "All Fields".
+        var latitude: Double? = nil
+        var longitude: Double? = nil
+        var radiusMeters: Double? = nil
 
-        func window(days: Int = 7, now: Date = .now, calendar: Calendar = .current) -> WindowSummary {
-            let start = calendar.date(byAdding: .day, value: -(days - 1), to: calendar.startOfDay(for: now)) ?? now
-            let inWindow = daily.filter { $0.date >= start }.sorted { $0.date < $1.date }
+        /// Totals for the `days` ending today, or ending `offset` days earlier for comparisons.
+        func window(days: Int = 7, offset: Int = 0, now: Date = .now, calendar: Calendar = .current) -> WindowSummary {
+            let today = calendar.startOfDay(for: now)
+            let start = calendar.date(byAdding: .day, value: -(days - 1) - offset, to: today) ?? now
+            let end = calendar.date(byAdding: .day, value: 1 - offset, to: today) ?? now
+            let inWindow = daily.filter { $0.date >= start && $0.date < end }.sorted { $0.date < $1.date }
             return WindowSummary(
                 aphidLeaves: inWindow.reduce(0) { $0 + $1.aphid },
                 totalLeaves: inWindow.reduce(0) { $0 + $1.total },
