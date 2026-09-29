@@ -7,10 +7,26 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		5EA7C0DE000000000000000C /* PepperWatchWatchApp.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 5EA7C0DE0000000000000001 /* PepperWatchWatchApp.app */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		5EA7C0DE0000000000000020 /* PepperWatchWatchWidgetsExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 5EA7C0DE0000000000000021 /* PepperWatchWatchWidgetsExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		7A11C0DE000000000000000C /* PepperWatchWidgetsExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 7A11C0DE0000000000000001 /* PepperWatchWidgetsExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
+		5EA7C0DE000000000000000D /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 63F68295306B92B300298C1C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 5EA7C0DE0000000000000007;
+			remoteInfo = PepperWatchWatchApp;
+		};
+		5EA7C0DE0000000000000022 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 63F68295306B92B300298C1C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 5EA7C0DE0000000000000027;
+			remoteInfo = PepperWatchWatchWidgetsExtension;
+		};
 		7A11C0DE000000000000000D /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 63F68295306B92B300298C1C /* Project object */;
@@ -21,6 +37,24 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
+		5EA7C0DE000000000000000B /* Embed Watch Content */ = {
+			isa = PBXCopyFilesBuildPhase;
+			dstPath = "$(CONTENTS_FOLDER_PATH)/Watch";
+			dstSubfolder = Product;
+			files = (
+				5EA7C0DE000000000000000C /* PepperWatchWatchApp.app in Embed Watch Content */,
+			);
+			name = "Embed Watch Content";
+		};
+		5EA7C0DE0000000000000023 /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			dstPath = "";
+			dstSubfolder = PlugIns;
+			files = (
+				5EA7C0DE0000000000000020 /* PepperWatchWatchWidgetsExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+		};
 		7A11C0DE000000000000000B /* Embed Foundation Extensions */ = {
 			isa = PBXCopyFilesBuildPhase;
 			dstPath = "";
@@ -33,11 +67,47 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
+		5EA7C0DE0000000000000001 /* PepperWatchWatchApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PepperWatchWatchApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		5EA7C0DE0000000000000021 /* PepperWatchWatchWidgetsExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = PepperWatchWatchWidgetsExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		63F6829D306B92B300298C1C /* Pepper Watch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Pepper Watch.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		7A11C0DE0000000000000001 /* PepperWatchWidgetsExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = PepperWatchWidgetsExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		5EA7C0DE0000000000000003 /* Exceptions for "Shared" folder in "PepperWatchWatchApp" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				WidgetIntents.swift,
+				WidgetViews.swift,
+			);
+			target = 5EA7C0DE0000000000000007 /* PepperWatchWatchApp */;
+		};
+		5EA7C0DE0000000000000024 /* Exceptions for "Shared" folder in "PepperWatchWatchWidgetsExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				WidgetIntents.swift,
+				WidgetViews.swift,
+			);
+			target = 5EA7C0DE0000000000000027 /* PepperWatchWatchWidgetsExtension */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		5EA7C0DE0000000000000002 /* PepperWatchWatchApp */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = PepperWatchWatchApp;
+			sourceTree = "<group>";
+		};
+		5EA7C0DE0000000000000010 /* WatchShared */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = WatchShared;
+			sourceTree = "<group>";
+		};
+		5EA7C0DE0000000000000025 /* PepperWatchWatchWidgets */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = PepperWatchWatchWidgets;
+			sourceTree = "<group>";
+		};
 		63F6829F306B92B300298C1C /* Pepper Watch */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = "Pepper Watch";
@@ -50,12 +120,26 @@
 		};
 		7A11C0DE0000000000000003 /* Shared */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				5EA7C0DE0000000000000003 /* Exceptions for "Shared" folder in "PepperWatchWatchApp" target */,
+				5EA7C0DE0000000000000024 /* Exceptions for "Shared" folder in "PepperWatchWatchWidgetsExtension" target */,
+			);
 			path = Shared;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		5EA7C0DE0000000000000005 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			files = (
+			);
+		};
+		5EA7C0DE0000000000000026 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			files = (
+			);
+		};
 		63F6829A306B92B300298C1C /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			files = (
@@ -75,6 +159,9 @@
 				63F6829F306B92B300298C1C /* Pepper Watch */,
 				7A11C0DE0000000000000003 /* Shared */,
 				7A11C0DE0000000000000002 /* PepperWatchWidgets */,
+				5EA7C0DE0000000000000002 /* PepperWatchWatchApp */,
+				5EA7C0DE0000000000000025 /* PepperWatchWatchWidgets */,
+				5EA7C0DE0000000000000010 /* WatchShared */,
 				63F6829E306B92B300298C1C /* Products */,
 			);
 			sourceTree = "<group>";
@@ -84,6 +171,8 @@
 			children = (
 				63F6829D306B92B300298C1C /* Pepper Watch.app */,
 				7A11C0DE0000000000000001 /* PepperWatchWidgetsExtension.appex */,
+				5EA7C0DE0000000000000001 /* PepperWatchWatchApp.app */,
+				5EA7C0DE0000000000000021 /* PepperWatchWatchWidgetsExtension.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -91,6 +180,50 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		5EA7C0DE0000000000000007 /* PepperWatchWatchApp */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 5EA7C0DE000000000000000A /* Build configuration list for PBXNativeTarget "PepperWatchWatchApp" */;
+			buildPhases = (
+				5EA7C0DE0000000000000004 /* Sources */,
+				5EA7C0DE0000000000000005 /* Frameworks */,
+				5EA7C0DE0000000000000006 /* Resources */,
+				5EA7C0DE0000000000000023 /* Embed Foundation Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				5EA7C0DE000000000000002D /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				5EA7C0DE0000000000000002 /* PepperWatchWatchApp */,
+				5EA7C0DE0000000000000010 /* WatchShared */,
+				7A11C0DE0000000000000003 /* Shared */,
+			);
+			name = PepperWatchWatchApp;
+			productName = PepperWatchWatchApp;
+			productReference = 5EA7C0DE0000000000000001 /* PepperWatchWatchApp.app */;
+			productType = "com.apple.product-type.application";
+		};
+		5EA7C0DE0000000000000027 /* PepperWatchWatchWidgetsExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 5EA7C0DE000000000000002C /* Build configuration list for PBXNativeTarget "PepperWatchWatchWidgetsExtension" */;
+			buildPhases = (
+				5EA7C0DE0000000000000028 /* Sources */,
+				5EA7C0DE0000000000000026 /* Frameworks */,
+				5EA7C0DE0000000000000029 /* Resources */,
+			);
+			buildRules = (
+			);
+			fileSystemSynchronizedGroups = (
+				5EA7C0DE0000000000000010 /* WatchShared */,
+				5EA7C0DE0000000000000025 /* PepperWatchWatchWidgets */,
+				7A11C0DE0000000000000003 /* Shared */,
+			);
+			name = PepperWatchWatchWidgetsExtension;
+			productName = PepperWatchWatchWidgetsExtension;
+			productReference = 5EA7C0DE0000000000000021 /* PepperWatchWatchWidgetsExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 		63F6829C306B92B300298C1C /* Pepper Watch */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 63F682A8306B92B400298C1C /* Build configuration list for PBXNativeTarget "Pepper Watch" */;
@@ -99,11 +232,13 @@
 				63F6829A306B92B300298C1C /* Frameworks */,
 				63F6829B306B92B300298C1C /* Resources */,
 				7A11C0DE000000000000000B /* Embed Foundation Extensions */,
+				5EA7C0DE000000000000000B /* Embed Watch Content */,
 			);
 			buildRules = (
 			);
 			dependencies = (
 				7A11C0DE000000000000000E /* PBXTargetDependency */,
+				5EA7C0DE000000000000000E /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				63F6829F306B92B300298C1C /* Pepper Watch */,
@@ -143,6 +278,12 @@
 				LastSwiftUpdateCheck = 2700;
 				LastUpgradeCheck = 2700;
 				TargetAttributes = {
+					5EA7C0DE0000000000000007 = {
+						CreatedOnToolsVersion = 27.0;
+					};
+					5EA7C0DE0000000000000027 = {
+						CreatedOnToolsVersion = 27.0;
+					};
 					63F6829C306B92B300298C1C = {
 						CreatedOnToolsVersion = 27.0;
 					};
@@ -167,11 +308,23 @@
 			targets = (
 				63F6829C306B92B300298C1C /* Pepper Watch */,
 				7A11C0DE0000000000000007 /* PepperWatchWidgetsExtension */,
+				5EA7C0DE0000000000000007 /* PepperWatchWatchApp */,
+				5EA7C0DE0000000000000027 /* PepperWatchWatchWidgetsExtension */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		5EA7C0DE0000000000000006 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			files = (
+			);
+		};
+		5EA7C0DE0000000000000029 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			files = (
+			);
+		};
 		63F6829B306B92B300298C1C /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			files = (
@@ -185,6 +338,16 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		5EA7C0DE0000000000000004 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			files = (
+			);
+		};
+		5EA7C0DE0000000000000028 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			files = (
+			);
+		};
 		63F68299306B92B300298C1C /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			files = (
@@ -198,6 +361,16 @@
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
+		5EA7C0DE000000000000000E /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 5EA7C0DE0000000000000007 /* PepperWatchWatchApp */;
+			targetProxy = 5EA7C0DE000000000000000D /* PBXContainerItemProxy */;
+		};
+		5EA7C0DE000000000000002D /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 5EA7C0DE0000000000000027 /* PepperWatchWatchWidgetsExtension */;
+			targetProxy = 5EA7C0DE0000000000000022 /* PBXContainerItemProxy */;
+		};
 		7A11C0DE000000000000000E /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 7A11C0DE0000000000000007 /* PepperWatchWidgetsExtension */;
@@ -206,6 +379,138 @@
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
+		5EA7C0DE0000000000000008 /* Debug configuration for PBXNativeTarget "PepperWatchWatchApp" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = PepperWatchWatchApp.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = NSA2PC5U28;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "Pepper Watch";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Pepper Watch uses your location so the Smart Stack can show a field's status when you arrive at it.";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = "com.tristanlistanco.Pepper-Watch";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.tristanlistanco.Pepper-Watch.watchkitapp";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 27.0;
+			};
+			name = Debug;
+		};
+		5EA7C0DE0000000000000009 /* Release configuration for PBXNativeTarget "PepperWatchWatchApp" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = PepperWatchWatchApp.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = NSA2PC5U28;
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "Pepper Watch";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Pepper Watch uses your location so the Smart Stack can show a field's status when you arrive at it.";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
+				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = "com.tristanlistanco.Pepper-Watch";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.tristanlistanco.Pepper-Watch.watchkitapp";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 27.0;
+			};
+			name = Release;
+		};
+		5EA7C0DE000000000000002A /* Debug configuration for PBXNativeTarget "PepperWatchWatchWidgetsExtension" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = PepperWatchWatchWidgets.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = NSA2PC5U28;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "PepperWatchWatchWidgets-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "Pepper Watch";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.tristanlistanco.Pepper-Watch.watchkitapp.Widgets";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 27.0;
+			};
+			name = Debug;
+		};
+		5EA7C0DE000000000000002B /* Release configuration for PBXNativeTarget "PepperWatchWatchWidgetsExtension" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = PepperWatchWatchWidgets.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = NSA2PC5U28;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "PepperWatchWatchWidgets-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "Pepper Watch";
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.tristanlistanco.Pepper-Watch.watchkitapp.Widgets";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				REGISTER_APP_GROUPS = YES;
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 27.0;
+			};
+			name = Release;
+		};
 		63F682A6306B92B400298C1C /* Debug configuration for PBXProject "Pepper Watch" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -341,12 +646,16 @@
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Pepper Watch uses the camera to scan bell pepper leaves for aphid damage. Frames are analyzed on this device and never uploaded.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Pepper Watch tags detections with your field location so you can map aphid hotspots. Location data stays on this device.";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphonesimulator*]" = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphonesimulator*]" = YES;
+				INFOPLIST_KEY_UIStatusBarStyle = UIStatusBarStyleDefault;
 				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphoneos*]" = UIStatusBarStyleDefault;
 				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphonesimulator*]" = UIStatusBarStyleDefault;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
@@ -392,12 +701,16 @@
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Pepper Watch uses the camera to scan bell pepper leaves for aphid damage. Frames are analyzed on this device and never uploaded.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Pepper Watch tags detections with your field location so you can map aphid hotspots. Location data stays on this device.";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents[sdk=iphonesimulator*]" = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UILaunchScreen_Generation[sdk=iphonesimulator*]" = YES;
+				INFOPLIST_KEY_UIStatusBarStyle = UIStatusBarStyleDefault;
 				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphoneos*]" = UIStatusBarStyleDefault;
 				"INFOPLIST_KEY_UIStatusBarStyle[sdk=iphonesimulator*]" = UIStatusBarStyleDefault;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
@@ -491,6 +804,22 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		5EA7C0DE000000000000000A /* Build configuration list for PBXNativeTarget "PepperWatchWatchApp" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				5EA7C0DE0000000000000008 /* Debug configuration for PBXNativeTarget "PepperWatchWatchApp" */,
+				5EA7C0DE0000000000000009 /* Release configuration for PBXNativeTarget "PepperWatchWatchApp" */,
+			);
+			defaultConfigurationName = Release;
+		};
+		5EA7C0DE000000000000002C /* Build configuration list for PBXNativeTarget "PepperWatchWatchWidgetsExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				5EA7C0DE000000000000002A /* Debug configuration for PBXNativeTarget "PepperWatchWatchWidgetsExtension" */,
+				5EA7C0DE000000000000002B /* Release configuration for PBXNativeTarget "PepperWatchWatchWidgetsExtension" */,
+			);
+			defaultConfigurationName = Release;
+		};
 		63F68298306B92B300298C1C /* Build configuration list for PBXProject "Pepper Watch" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (

@@ -8,15 +8,18 @@ import SwiftData
 import SwiftUI
 import WidgetKit
 
-/// Keeps the widget snapshot in the App Group container current. Updates are debounced
-/// after SwiftData saves so auto-logging while scanning doesn't reload widgets every frame.
+/// Keeps the widget snapshot in the App Group container, and the paired Apple Watch, current.
+/// Updates are debounced after SwiftData saves so auto-logging while scanning doesn't reload
+/// widgets every frame.
 final class WidgetSync {
     private let context: ModelContext
+    private let watch: WatchSync?
     private var pendingUpdate: Task<Void, Never>?
     private var listener: Task<Void, Never>?
 
-    init(context: ModelContext) {
+    init(context: ModelContext, watch: WatchSync? = nil) {
         self.context = context
+        self.watch = watch
     }
 
     func start() {
@@ -38,8 +41,10 @@ final class WidgetSync {
     }
 
     func update() {
-        Self.makeSnapshot(from: context).save()
+        let snapshot = Self.makeSnapshot(from: context)
+        snapshot.save()
         WidgetCenter.shared.reloadAllTimelines()
+        watch?.send(snapshot)
     }
 
     /// Builds per-day counts for the last 30 days, overall and per field.
@@ -72,7 +77,11 @@ final class WidgetSync {
         }
 
         let fieldStatuses = fields.map { field in
-            status(id: field.id.uuidString, name: field.name, locationName: field.locationName, events: events.filter { $0.field?.id == field.id })
+            var entry = status(id: field.id.uuidString, name: field.name, locationName: field.locationName, events: events.filter { $0.field?.id == field.id })
+            entry.latitude = field.latitude
+            entry.longitude = field.longitude
+            entry.radiusMeters = field.radiusMeters
+            return entry
         }
         return WidgetSnapshot(
             generatedAt: now,
