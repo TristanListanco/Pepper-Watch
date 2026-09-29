@@ -18,7 +18,7 @@ struct PerformanceMonitorView: View {
     var body: some View {
         List {
             Section {
-                LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 12) {
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 160), spacing: 12)], spacing: 12) {
                     StatTile(title: "Thermal state", value: monitor.snapshot.thermalState.title, detail: "Throttles above Serious", symbol: monitor.snapshot.thermalState.symbol)
                     StatTile(title: "Memory footprint", value: "\(monitor.snapshot.memoryMB.fixed(0)) MB", detail: "App physical footprint", symbol: "memorychip")
                     StatTile(
