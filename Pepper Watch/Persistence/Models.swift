@@ -41,6 +41,55 @@ nonisolated enum Verdict: String, Codable, Sendable {
     case incorrect
 }
 
+enum AppSchema {
+    static let schema = Schema([Field.self, ScanSession.self, DetectionEvent.self, BoundingBox.self, SystemLog.self])
+}
+
+/// A monitored plot with a circular geofence. Scans are verified against it.
+@Model
+final class Field {
+    var id: UUID = UUID()
+    var name: String = ""
+    /// Human-readable place, e.g. "Poblacion, Claveria". Reverse-geocoded when the field is created.
+    var locationName: String = ""
+    var latitude: Double = 0
+    var longitude: Double = 0
+    var radiusMeters: Double = 100
+    var createdAt: Date = Date.now
+    var isDemo: Bool = false
+
+    @Relationship(deleteRule: .nullify, inverse: \DetectionEvent.field)
+    var events: [DetectionEvent] = []
+
+    @Relationship(deleteRule: .nullify, inverse: \ScanSession.field)
+    var sessions: [ScanSession] = []
+
+    init(name: String, locationName: String, latitude: Double, longitude: Double, radiusMeters: Double) {
+        self.name = name
+        self.locationName = locationName
+        self.latitude = latitude
+        self.longitude = longitude
+        self.radiusMeters = radiusMeters
+    }
+
+    var region: FieldRegion {
+        FieldRegion(id: id, name: name, latitude: latitude, longitude: longitude, radiusMeters: radiusMeters)
+    }
+
+    var latestEvent: DetectionEvent? {
+        events.max { $0.timestamp < $1.timestamp }
+    }
+}
+
+/// Sendable snapshot of a field's geofence.
+nonisolated struct FieldRegion: Hashable, Sendable {
+    let id: UUID
+    let name: String
+    let latitude: Double
+    let longitude: Double
+    let radiusMeters: Double
+}
+
 @Model
 final class ScanSession {
     var id: UUID = UUID()
@@ -53,6 +102,7 @@ final class ScanSession {
     var peakAphidCount: Int = 0
     var computeUnits: String = ""
     var isDemo: Bool = false
+    var field: Field?
 
     @Relationship(deleteRule: .nullify, inverse: \DetectionEvent.session)
     var events: [DetectionEvent] = []
@@ -80,6 +130,8 @@ final class DetectionEvent {
     var latitude: Double?
     var longitude: Double?
     var notes: String = ""
+    /// Whether the device was inside the field's geofence when this was logged (`nil` = not checked).
+    var geofenceVerified: Bool?
     // Denormalized so dashboards can aggregate without faulting every box.
     var aphidCount: Int = 0
     var healthyCount: Int = 0
@@ -88,6 +140,7 @@ final class DetectionEvent {
     @Attribute(.externalStorage) var thumbnailData: Data?
 
     var session: ScanSession?
+    var field: Field?
 
     @Relationship(deleteRule: .cascade, inverse: \BoundingBox.event)
     var boxes: [BoundingBox] = []

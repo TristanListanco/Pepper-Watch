@@ -37,7 +37,7 @@ nonisolated enum SettingsKey {
     static let autoLogRequiresAphids = "logging.autoLogRequiresAphids"
     static let geotagEnabled = "logging.geotag"
     static let healthLogInterval = "logging.healthInterval"
-    static let fieldName = "field.name"
+    static let strictGeofence = "field.strictGeofence"
     static let fpsTarget = "benchmark.fpsTarget"
 }
 
@@ -58,7 +58,7 @@ nonisolated enum AppSettings {
         SettingsKey.autoLogRequiresAphids: false,
         SettingsKey.geotagEnabled: true,
         SettingsKey.healthLogInterval: 30.0,
-        SettingsKey.fieldName: "Field A",
+        SettingsKey.strictGeofence: false,
         SettingsKey.fpsTarget: 17.0,
     ]
 
@@ -87,6 +87,6 @@ nonisolated enum AppSettings {
     static var geotagEnabled: Bool { store.bool(forKey: SettingsKey.geotagEnabled) }
     static var healthLogInterval: Double { store.double(forKey: SettingsKey.healthLogInterval) }
     static var hapticsEnabled: Bool { store.bool(forKey: SettingsKey.hapticsEnabled) }
-    static var fieldName: String { store.string(forKey: SettingsKey.fieldName) ?? "Field A" }
+    static var strictGeofence: Bool { store.bool(forKey: SettingsKey.strictGeofence) }
     static var fpsTarget: Double { store.double(forKey: SettingsKey.fpsTarget) }
 }

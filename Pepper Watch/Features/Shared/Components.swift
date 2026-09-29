@@ -11,9 +11,13 @@ struct SeverityBadge: View {
     var compact = false
 
     var body: some View {
-        Label(severity?.title ?? "No leaves", systemImage: severity?.symbol ?? "viewfinder")
+        Label {
+            Text(severity?.title ?? "No leaves")
+        } icon: {
+            Image(systemName: severity?.symbol ?? "viewfinder")
+                .foregroundStyle(severity?.color ?? .secondary)
+        }
             .font(compact ? .caption.weight(.semibold) : .subheadline.weight(.semibold))
-            .symbolRenderingMode(.multicolor)
             .padding(.horizontal, compact ? 8 : 10)
             .padding(.vertical, compact ? 4 : 6)
             .foregroundStyle(.primary)

@@ -12,12 +12,13 @@ import UIKit
 enum DemoDataGenerator {
     /// Claveria, Misamis Oriental: one of the Northern Mindanao growing areas cited in the thesis.
     private static let fieldCenter = (latitude: 8.6107, longitude: 124.8947)
-    private static let fields = ["Field A", "Field B", "Greenhouse 1"]
+    private static let fieldNames = ["Field A", "Field B", "Greenhouse 1"]
 
     static func generate(in context: ModelContext, days: Int = 14) {
         var rng = SystemRandomNumberGenerator()
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: .now)
+        let fields = demoFields(in: context)
 
         for dayOffset in stride(from: days - 1, through: 0, by: -1) {
             guard let day = calendar.date(byAdding: .day, value: -dayOffset, to: today) else { continue }
@@ -27,11 +28,12 @@ enum DemoDataGenerator {
 
             for field in fields.shuffled().prefix(Int.random(in: 1...2, using: &rng)) {
                 let start = day.addingTimeInterval(Double.random(in: 6.5...15, using: &rng) * 3600)
-                let session = ScanSession(fieldName: field, computeUnits: ComputeUnitsOption.all.shortTitle, startedAt: start)
+                let session = ScanSession(fieldName: field.name, computeUnits: ComputeUnitsOption.all.shortTitle, startedAt: start)
                 session.isDemo = true
                 session.averageFPS = Double.random(in: 21...32, using: &rng)
                 session.averageInferenceMs = Double.random(in: 16...34, using: &rng)
                 context.insert(session)
+                session.field = field
 
                 let eventCount = Int.random(in: 3...6, using: &rng)
                 var frames = 0
@@ -40,6 +42,7 @@ enum DemoDataGenerator {
                     let event = makeEvent(field: field, at: start.addingTimeInterval(Double(index) * 45), rate: rate, rng: &rng)
                     context.insert(event)
                     event.session = session
+                    event.field = field
                     session.peakAphidCount = max(session.peakAphidCount, event.aphidCount)
                     frames += Int.random(in: 400...900, using: &rng)
                 }
@@ -60,10 +63,30 @@ enum DemoDataGenerator {
         for event in events { context.delete(event) }
         let sessions = (try? context.fetch(FetchDescriptor<ScanSession>(predicate: #Predicate { $0.isDemo }))) ?? []
         for session in sessions { context.delete(session) }
+        let fields = (try? context.fetch(FetchDescriptor<Field>(predicate: #Predicate { $0.isDemo }))) ?? []
+        for field in fields { context.delete(field) }
         try? context.save()
     }
 
-    private static func makeEvent(field: String, at date: Date, rate: Double, rng: inout SystemRandomNumberGenerator) -> DetectionEvent {
+    /// Reuses existing demo fields so generating twice doesn't duplicate them.
+    private static func demoFields(in context: ModelContext) -> [Field] {
+        let existing = (try? context.fetch(FetchDescriptor<Field>(predicate: #Predicate { $0.isDemo }))) ?? []
+        return fieldNames.enumerated().map { index, name in
+            if let field = existing.first(where: { $0.name == name }) { return field }
+            let field = Field(
+                name: name,
+                locationName: "Claveria, Misamis Oriental",
+                latitude: fieldCenter.latitude + Double(index) * 0.0012,
+                longitude: fieldCenter.longitude + Double(index) * 0.0009,
+                radiusMeters: index == 2 ? 60 : 110
+            )
+            field.isDemo = true
+            context.insert(field)
+            return field
+        }
+    }
+
+    private static func makeEvent(field: Field, at date: Date, rate: Double, rng: inout SystemRandomNumberGenerator) -> DetectionEvent {
         let leafCount = Int.random(in: 3...10, using: &rng)
         var detections: [Detection] = []
         let columns = 4
@@ -90,14 +113,15 @@ enum DemoDataGenerator {
         let event = DetectionEvent(
             timestamp: date,
             source: .demo,
-            fieldName: field,
+            fieldName: field.name,
             inferenceMs: Double.random(in: 16...34, using: &rng),
             imageSize: imageSize,
             summary: DetectionSummary(detections)
         )
-        let fieldIndex = Double(fields.firstIndex(of: field) ?? 0)
-        event.latitude = fieldCenter.latitude + fieldIndex * 0.0012 + Double.random(in: -0.0004...0.0004, using: &rng)
-        event.longitude = fieldCenter.longitude + fieldIndex * 0.0009 + Double.random(in: -0.0004...0.0004, using: &rng)
+        // Scatter points inside the field's geofence (~0.00045° ≈ 50 m).
+        event.latitude = field.latitude + Double.random(in: -0.00045...0.00045, using: &rng)
+        event.longitude = field.longitude + Double.random(in: -0.00045...0.00045, using: &rng)
+        event.geofenceVerified = true
 
         let image = renderLeaves(detections, size: imageSize)
         event.imageData = image.jpegData(compressionQuality: 0.7)
