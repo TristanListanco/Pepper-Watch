@@ -8,13 +8,14 @@
 import AppIntents
 import Foundation
 
-/// Which field the Field Actions widget is showing: index 0 is "All Fields", then each field.
+/// Which field the Field Actions widget is showing. Only real fields are offered;
+/// "All Fields" appears only before any field exists.
 nonisolated enum WidgetActionsState {
     private static let indexKey = "widget.actions.index"
 
     static func options(in snapshot: WidgetSnapshot?) -> [WidgetSnapshot.FieldStatus] {
         guard let snapshot else { return [] }
-        return [snapshot.overall] + snapshot.fields
+        return snapshot.fields.isEmpty ? [snapshot.overall] : snapshot.fields
     }
 
     static var selectedIndex: Int {

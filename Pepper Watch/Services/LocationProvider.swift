@@ -47,6 +47,43 @@ final class LocationProvider {
         serviceSession = nil
     }
 
+    /// Pull to refresh: waits briefly for a fresh fix, then looks up the place name again.
+    func refresh(timeout: Duration = .seconds(4)) async {
+        guard !isDenied else { return }
+        if let fix = await Self.freshLocation(timeout: timeout) {
+            lastLocation = fix
+        }
+        guard let location = lastLocation else { return }
+        lastGeocodedLocation = location
+        if let name = await PlaceNamer.placeName(for: location) {
+            placeName = name
+        }
+    }
+
+    /// The first fix from a new update stream that's no more than a few seconds old, or `nil` on timeout.
+    @concurrent private static func freshLocation(timeout: Duration) async -> CLLocation? {
+        let requested = Date.now
+        return await withTaskGroup(of: CLLocation?.self) { group in
+            group.addTask {
+                do {
+                    for try await update in CLLocationUpdate.liveUpdates() {
+                        if let location = update.location, location.timestamp.timeIntervalSince(requested) > -5 {
+                            return location
+                        }
+                    }
+                } catch {}
+                return nil
+            }
+            group.addTask {
+                try? await Task.sleep(for: timeout)
+                return nil
+            }
+            let first = await group.next() ?? nil
+            group.cancelAll()
+            return first
+        }
+    }
+
     private func refreshPlaceName(for location: CLLocation) {
         if let lastGeocodedLocation, location.distance(from: lastGeocodedLocation) < 150 { return }
         lastGeocodedLocation = location
