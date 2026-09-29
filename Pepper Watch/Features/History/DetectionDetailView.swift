@@ -6,6 +6,7 @@
 import MapKit
 import SwiftData
 import SwiftUI
+import TipKit
 
 struct DetectionDetailView: View {
     @Bindable var event: DetectionEvent
@@ -14,7 +15,9 @@ struct DetectionDetailView: View {
     @Environment(\.dismiss) private var dismiss
     @State private var decodedImage: UIImage?
     @State private var highlightedID: Detection.ID?
-    @State private var shareImage: Image?
+    @State private var reportURL: URL?
+    @State private var insight: ScanInsight?
+    @State private var isGeneratingInsight = false
     @State private var isConfirmingDelete = false
     @State private var isViewingFullScreen = false
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
@@ -23,31 +26,36 @@ struct DetectionDetailView: View {
         event.boxes.sorted { $0.confidence > $1.confidence }
     }
 
+    /// Changes that should be reflected in the shared PDF.
+    private var reportSignature: String {
+        "\(insight?.headline ?? "")|\(event.notes)|\(event.boxes.map { $0.verdictRaw ?? "-" }.joined())"
+    }
+
     var body: some View {
         ScrollView {
-            if horizontalSizeClass == .regular {
-                // iPad: photo and summary beside the guidance, validation and metadata.
-                HStack(alignment: .top, spacing: 20) {
-                    VStack(alignment: .leading, spacing: 16) {
-                        photo
-                        summary
-                        notes
-                    }
-                    .frame(maxWidth: .infinity)
-                    VStack(alignment: .leading, spacing: 16) {
-                        if let severity = event.severity {
-                            RecommendationCard(severity: severity)
+            VStack(alignment: .leading, spacing: 16) {
+                hero
+                if horizontalSizeClass == .regular {
+                    // iPad: photo and insight beside the guidance, validation and metadata.
+                    HStack(alignment: .top, spacing: 20) {
+                        VStack(alignment: .leading, spacing: 16) {
+                            photo
+                            insightCard
+                            notes
                         }
-                        verification
-                        details
+                        .frame(maxWidth: .infinity)
+                        VStack(alignment: .leading, spacing: 16) {
+                            if let severity = event.severity {
+                                RecommendationCard(severity: severity)
+                            }
+                            verification
+                            details
+                        }
+                        .frame(maxWidth: .infinity)
                     }
-                    .frame(maxWidth: .infinity)
-                }
-                .padding()
-            } else {
-                VStack(alignment: .leading, spacing: 16) {
+                } else {
                     photo
-                    summary
+                    insightCard
                     if let severity = event.severity {
                         RecommendationCard(severity: severity)
                     }
@@ -55,16 +63,21 @@ struct DetectionDetailView: View {
                     details
                     notes
                 }
-                .padding()
             }
+            .padding()
         }
         .background(Color(.systemGroupedBackground))
         .navigationTitle(event.timestamp.formatted(date: .abbreviated, time: .shortened))
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            if let shareImage {
-                ToolbarItem(placement: .primaryAction) {
-                    ShareLink(item: shareImage, preview: SharePreview("Pepper Watch scan", image: shareImage))
+            ToolbarItem(placement: .primaryAction) {
+                if let reportURL {
+                    ShareLink(item: reportURL, preview: SharePreview("Pepper Watch scan report", image: Image(systemName: "doc.richtext"))) {
+                        Label("Share Report", systemImage: "square.and.arrow.up")
+                    }
+                } else {
+                    Button("Share Report", systemImage: "square.and.arrow.up") {}
+                        .disabled(true)
                 }
             }
             ToolbarItem(placement: .primaryAction) {
@@ -83,9 +96,143 @@ struct DetectionDetailView: View {
         }
         .task(id: event.id) {
             if let data = event.imageData { decodedImage = UIImage(data: data) }
-            renderShareImage()
+            insight = event.savedInsight
+            if insight == nil { await generateInsight() }
+        }
+        .task(id: reportSignature) {
+            // Debounce typing in Notes before re-rendering the PDF.
+            try? await Task.sleep(for: .milliseconds(600))
+            guard !Task.isCancelled else { return }
+            reportURL = ScanReport.renderPDF(for: event, insight: insight)
         }
         .onDisappear { try? modelContext.save() }
+    }
+
+    // MARK: - Summary
+
+    /// The result first: severity, infestation rate and class counts, tinted by severity.
+    private var hero: some View {
+        let summary = event.summary
+        let tint = summary.severity?.color ?? Color.secondary
+        return VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                SeverityBadge(severity: summary.severity)
+                Spacer()
+                if let verified = event.geofenceVerified {
+                    Label(verified ? "In field" : "Outside field", systemImage: verified ? "checkmark.seal.fill" : "location.slash")
+                        .font(.caption.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
+            }
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text(summary.infestationRate.percentText)
+                    .font(.system(size: 56, weight: .bold, design: .rounded))
+                    .contentTransition(.numericText())
+                Text("of leaves infested")
+                    .font(.title3.weight(.medium))
+                    .foregroundStyle(.secondary)
+            }
+            HStack(spacing: 12) {
+                heroStat(.aphidInfested, count: summary.aphidCount)
+                heroStat(.healthy, count: summary.healthyCount)
+            }
+            if !event.fieldName.isEmpty {
+                Label(event.fieldName, systemImage: "mappin.and.ellipse")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(20)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            LinearGradient(colors: [tint.opacity(0.3), tint.opacity(0.08)], startPoint: .topLeading, endPoint: .bottomTrailing),
+            in: .rect(cornerRadius: 24)
+        )
+        .overlay(RoundedRectangle(cornerRadius: 24).strokeBorder(tint.opacity(0.35)))
+        .accessibilityElement(children: .combine)
+    }
+
+    private func heroStat(_ leafClass: LeafClass, count: Int) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: leafClass.symbol)
+                .font(.title2)
+                .foregroundStyle(leafClass.color)
+                .frame(width: 32)
+            VStack(alignment: .leading, spacing: 0) {
+                Text(count, format: .number)
+                    .font(.title.weight(.bold))
+                    .contentTransition(.numericText())
+                Text(leafClass.displayName)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(12)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(Color.card.opacity(0.85), in: .rect(cornerRadius: 16))
+    }
+
+    // MARK: - Insight
+
+    private var insightCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("Insight").font(.headline)
+                Spacer()
+                if isGeneratingInsight {
+                    ProgressView().controlSize(.small)
+                } else if insight != nil {
+                    Button("Regenerate", systemImage: "arrow.clockwise") {
+                        Task { await generateInsight() }
+                    }
+                    .labelStyle(.iconOnly)
+                }
+            }
+            if let insight {
+                Text(insight.headline)
+                    .font(.title3.weight(.semibold))
+                    .fixedSize(horizontal: false, vertical: true)
+                ForEach(insight.observations, id: \.self) { observation in
+                    Text(observation)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if let nextStep = insight.nextStep {
+                    Label {
+                        Text(nextStep).fixedSize(horizontal: false, vertical: true)
+                    } icon: {
+                        Image(systemName: "lightbulb.fill").foregroundStyle(.yellow)
+                    }
+                    .padding(12)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(.cardInset, in: .rect(cornerRadius: 14))
+                }
+                Text(insight.source.footnote)
+                    .font(.caption2)
+                    .foregroundStyle(.tertiary)
+            } else {
+                Text("Analyzing this photo…")
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(.card, in: .rect(cornerRadius: 24))
+        .animation(.smooth, value: insight)
+    }
+
+    private func generateInsight() async {
+        isGeneratingInsight = true
+        defer { isGeneratingInsight = false }
+        let result = await ScanInsightGenerator.generate(
+            image: decodedImage?.cgImage,
+            detections: event.detections,
+            fieldName: event.fieldName,
+            date: event.timestamp
+        )
+        event.save(result)
+        try? modelContext.save()
+        insight = result
     }
 
     private var photo: some View {
@@ -116,19 +263,6 @@ struct DetectionDetailView: View {
         }
     }
 
-    private var summary: some View {
-        HStack(spacing: 16) {
-            ClassCountLabel(leafClass: .aphidInfested, count: event.aphidCount)
-            ClassCountLabel(leafClass: .healthy, count: event.healthyCount)
-            Spacer()
-            VStack(alignment: .trailing, spacing: 0) {
-                Text(event.summary.infestationRate.percentText)
-                    .font(.title3.weight(.bold).monospacedDigit())
-                Text("infested").font(.caption2).foregroundStyle(.secondary)
-            }
-        }
-    }
-
     // MARK: - Field validation
 
     private var verification: some View {
@@ -141,9 +275,7 @@ struct DetectionDetailView: View {
                     .font(.caption.monospacedDigit())
                     .foregroundStyle(.secondary)
             }
-            Text("Confirm or reject each prediction. Your answers feed the precision, recall, accuracy and F1 scores in Insights.")
-                .font(.caption)
-                .foregroundStyle(.secondary)
+            TipView(VerifyDetectionsTip())
 
             if sortedBoxes.isEmpty {
                 Text("No leaves were detected in this scan.")
@@ -230,19 +362,6 @@ struct DetectionDetailView: View {
         case true?: "checkmark.seal"
         case false?: "location.slash"
         case nil: "questionmark.circle"
-        }
-    }
-
-    private func renderShareImage() {
-        guard let decodedImage else { return }
-        let aspect = decodedImage.size.height / max(decodedImage.size.width, 1)
-        let renderer = ImageRenderer(
-            content: AnnotatedImageView(imageData: event.imageData, detections: event.detections)
-                .frame(width: 1080, height: 1080 * aspect)
-        )
-        renderer.scale = 1
-        if let uiImage = renderer.uiImage {
-            shareImage = Image(uiImage: uiImage)
         }
     }
 }

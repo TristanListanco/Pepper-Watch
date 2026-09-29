@@ -2,11 +2,12 @@
 //  HistoryView.swift
 //  Pepper Watch
 //
-//  Thesis "Historical Detection Log": searchable gallery of past scans.
+//  Thesis "Historical Detection Log": filterable gallery of past scans.
 //
 
 import SwiftData
 import SwiftUI
+import TipKit
 
 enum HistoryFilter: String, CaseIterable, Identifiable {
     case all = "All"
@@ -41,14 +42,15 @@ struct HistoryView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.systemLogger) private var logger
     @AppStorage("history.thumbnailLevel") private var thumbnailLevel = 2
-    @State private var searchText = ""
     @State private var filter: HistoryFilter = .all
     @State private var fieldFilterID = ""
     @State private var selectedDay: Date?
     @State private var isSelecting = false
     @State private var selection: Set<UUID> = []
     @State private var pendingDeletion: [DetectionEvent] = []
-    @State private var pinchBaseline: CGFloat = 1
+    @State private var path: [DetectionEvent] = []
+    @State private var pinchScale: CGFloat = 1
+    @State private var pinchAnchor: UnitPoint = .center
 
     /// Minimum thumbnail widths; the grid fits as many columns as the width allows (3 on iPhone at the default).
     private static let thumbnailSizes: [CGFloat] = [64, 84, 110, 150, 210, 300]
@@ -62,11 +64,7 @@ struct HistoryView: View {
         events.filter { event in
             guard filter.includes(event) else { return false }
             if !fieldFilterID.isEmpty, event.field?.id.uuidString != fieldFilterID { return false }
-            guard !searchText.isEmpty else { return true }
-            return event.fieldName.localizedCaseInsensitiveContains(searchText)
-                || event.notes.localizedCaseInsensitiveContains(searchText)
-                || event.source.title.localizedCaseInsensitiveContains(searchText)
-                || (event.severity?.title.localizedCaseInsensitiveContains(searchText) ?? false)
+            return true
         }
     }
 
@@ -81,26 +79,38 @@ struct HistoryView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        NavigationStack(path: $path) {
             ScrollView {
                 VStack(spacing: 12) {
                     if !events.isEmpty, !isSelecting {
+                        TipView(PinchGridTip())
+                            .padding(.horizontal)
                         activityCard
                             .padding(.horizontal)
                     }
                     grid
                 }
+                // Photos-style pinch: the content follows the fingers, then settles at the new size.
+                // Scaling inside the scroll view keeps the large title and anchors the zoom in the content.
+                .scaleEffect(pinchScale, anchor: pinchAnchor)
+                .simultaneousGesture(pinchToResize)
             }
             .background(Color(.systemGroupedBackground))
-            .simultaneousGesture(pinchToResize)
             .sensoryFeedback(.selection, trigger: thumbnailLevel)
             .navigationTitle(isSelecting ? (selection.isEmpty ? "Select Items" : "\(selection.count) Selected") : "History")
             .navigationBarTitleDisplayMode(isSelecting ? .inline : .automatic)
             .navigationDestination(for: DetectionEvent.self) { event in
                 DetectionDetailView(event: event)
             }
-            .searchable(text: $searchText, prompt: "Field, notes, severity")
             .toolbar { toolbarContent }
+            #if DEBUG
+            // `-PWOpenLatestScan YES` opens the newest scan for screenshots.
+            .task {
+                if UserDefaults.standard.bool(forKey: "PWOpenLatestScan"), path.isEmpty, let latest = events.first {
+                    path = [latest]
+                }
+            }
+            #endif
             .toolbar(isSelecting ? .hidden : .visible, for: .tabBar)
             .overlay {
                 if events.isEmpty {
@@ -110,7 +120,11 @@ struct HistoryView: View {
                         description: Text("Detections logged while scanning, snapshots and saved photos appear here.")
                     )
                 } else if visibleEvents.isEmpty {
-                    ContentUnavailableView.search(text: searchText)
+                    ContentUnavailableView(
+                        "No Matching Scans",
+                        systemImage: "line.3.horizontal.decrease.circle",
+                        description: Text("Try a different filter or field.")
+                    )
                 }
             }
             .confirmationDialog(
@@ -134,13 +148,8 @@ struct HistoryView: View {
         let recent = matchingEvents.filter { $0.timestamp >= monthStart }
         return VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("Activity")
-                        .font(.headline)
-                    Text("Scans per day, last 30 days. Tap a day to filter.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+                Text("Activity")
+                    .font(.headline)
                 Spacer()
                 if let selectedDay {
                     Button {
@@ -185,12 +194,11 @@ struct HistoryView: View {
                         tile(for: event)
                     }
                 } header: {
-                    DayHeader(day: group.day, events: group.events)
+                    DayHeader(day: group.day)
                 }
             }
         }
         .padding(.horizontal, 3)
-        .animation(.snappy, value: thumbnailLevel)
     }
 
     @ViewBuilder
@@ -223,20 +231,35 @@ struct HistoryView: View {
         }
     }
 
-    /// Pinch in to see more thumbnails, pinch out to see them larger (like Photos).
+    /// Pinch in to see more thumbnails, pinch out to see them larger. Like Photos, the grid scales
+    /// live around the pinch point and springs into the new thumbnail size on release.
     private var pinchToResize: some Gesture {
         MagnifyGesture()
             .onChanged { value in
-                let ratio = value.magnification / pinchBaseline
-                if ratio > 1.3, thumbnailLevel < Self.thumbnailSizes.count - 1 {
-                    thumbnailLevel += 1
-                    pinchBaseline = value.magnification
-                } else if ratio < 0.77, thumbnailLevel > 0 {
-                    thumbnailLevel -= 1
-                    pinchBaseline = value.magnification
+                pinchAnchor = value.startAnchor
+                let magnification = value.magnification
+                let largest = Self.thumbnailSizes.count - 1
+                if magnification > 1 {
+                    // Rubber-band when already at the largest size.
+                    pinchScale = thumbnailLevel < largest ? min(magnification, 2) : 1 + (magnification - 1) * 0.12
+                } else {
+                    pinchScale = thumbnailLevel > 0 ? max(magnification, 0.5) : 1 - (1 - magnification) * 0.12
                 }
             }
-            .onEnded { _ in pinchBaseline = 1 }
+            .onEnded { value in
+                PinchGridTip().invalidate(reason: .actionPerformed)
+                let magnification = value.magnification
+                var level = thumbnailLevel
+                if magnification > 1.15 {
+                    level += magnification > 1.7 ? 2 : 1
+                } else if magnification < 0.87 {
+                    level -= magnification < 0.6 ? 2 : 1
+                }
+                withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
+                    thumbnailLevel = min(max(level, 0), Self.thumbnailSizes.count - 1)
+                    pinchScale = 1
+                }
+            }
     }
 
     // MARK: - Toolbar
@@ -289,11 +312,15 @@ struct HistoryView: View {
                     }
                     Section("Thumbnail Size") {
                         Button("Larger", systemImage: "plus.magnifyingglass") {
-                            thumbnailLevel = min(thumbnailLevel + 1, Self.thumbnailSizes.count - 1)
+                            withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
+                                thumbnailLevel = min(thumbnailLevel + 1, Self.thumbnailSizes.count - 1)
+                            }
                         }
                         .disabled(thumbnailLevel == Self.thumbnailSizes.count - 1)
                         Button("Smaller", systemImage: "minus.magnifyingglass") {
-                            thumbnailLevel = max(thumbnailLevel - 1, 0)
+                            withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
+                                thumbnailLevel = max(thumbnailLevel - 1, 0)
+                            }
                         }
                         .disabled(thumbnailLevel == 0)
                     }
@@ -329,22 +356,14 @@ struct HistoryView: View {
 
 private struct DayHeader: View {
     let day: Date
-    let events: [DetectionEvent]
 
     var body: some View {
-        let aphids = events.reduce(0) { $0 + $1.aphidCount }
-        let leaves = events.reduce(0) { $0 + $1.aphidCount + $1.healthyCount }
-        HStack(alignment: .firstTextBaseline) {
-            Text(day, format: .dateTime.weekday(.wide).month().day())
-                .font(.headline)
-            Spacer()
-            Text("\(events.count) scans · \(leaves == 0 ? "–" : (Double(aphids) / Double(leaves)).percentText) infested")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-        }
-        .padding(.horizontal, 10)
-        .padding(.vertical, 8)
-        .background(.bar)
+        Text(day, format: .dateTime.weekday(.wide).month().day())
+            .font(.headline)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 8)
+            .background(.bar)
     }
 }
 
