@@ -4,6 +4,7 @@
 //
 
 import SwiftUI
+import UIKit
 
 /// Status pill: icon + label + reserved status color, never color alone.
 struct SeverityBadge: View {
@@ -77,31 +78,6 @@ struct StatTile: View {
     }
 }
 
-/// Titled container for a dashboard chart.
-struct ChartCard<Content: View>: View {
-    let title: String
-    var subtitle: String?
-    @ViewBuilder var content: Content
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text(title)
-                    .font(.headline)
-                if let subtitle {
-                    Text(subtitle)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            content
-        }
-        .padding()
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.card, in: .rect(cornerRadius: 24))
-    }
-}
-
 /// Plain-language diagnosis and treatment steps (thesis "Actionable Output Panel").
 struct RecommendationCard: View {
     let severity: Severity
@@ -165,4 +141,10 @@ extension ShapeStyle where Self == Color {
     static var card: Color { Color(.secondarySystemGroupedBackground) }
     /// Inset surface for tiles placed inside a card.
     static var cardInset: Color { Color(.tertiarySystemGroupedBackground) }
+    /// Insight detail cards: white in light mode, a lifted gray (not near-black) in dark mode.
+    static var elevatedCard: Color {
+        Color(uiColor: UIColor { traits in
+            traits.userInterfaceStyle == .dark ? .tertiarySystemBackground : .secondarySystemGroupedBackground
+        })
+    }
 }

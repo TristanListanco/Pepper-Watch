@@ -4,7 +4,6 @@
 //
 
 import Charts
-import MapKit
 import SwiftUI
 
 private extension View {
@@ -26,70 +25,6 @@ struct ChartTooltip<Content: View>: View {
             .padding(8)
             .background(.regularMaterial, in: .rect(cornerRadius: 10))
             .overlay(RoundedRectangle(cornerRadius: 10).strokeBorder(.separator))
-    }
-}
-
-// MARK: - Leaf health distribution
-
-struct LeafHealthDonut: View {
-    let aphid: Int
-    let healthy: Int
-
-    private var slices: [(leafClass: LeafClass, count: Int)] {
-        [(.aphidInfested, aphid), (.healthy, healthy)]
-    }
-
-    private var rate: Double {
-        aphid + healthy == 0 ? 0 : Double(aphid) / Double(aphid + healthy)
-    }
-
-    var body: some View {
-        VStack(spacing: 16) {
-            Chart(slices, id: \.leafClass) { slice in
-                SectorMark(
-                    angle: .value("Leaves", slice.count),
-                    innerRadius: .ratio(0.64),
-                    angularInset: 2
-                )
-                .cornerRadius(4)
-                .foregroundStyle(by: .value("Class", slice.leafClass.displayName))
-            }
-            .leafClassColorScale()
-            .chartLegend(.hidden)
-            .chartBackground { proxy in
-                GeometryReader { geometry in
-                    if let plotFrame = proxy.plotFrame {
-                        let frame = geometry[plotFrame]
-                        VStack(spacing: 0) {
-                            Text(rate.percentText)
-                                .font(.title.weight(.bold))
-                            Text("infested")
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                        }
-                        .position(x: frame.midX, y: frame.midY)
-                    }
-                }
-            }
-            .frame(height: 200)
-
-            // Legend doubles as direct labels: icon + name + count + share.
-            HStack(spacing: 24) {
-                ForEach(slices, id: \.leafClass) { slice in
-                    HStack(spacing: 8) {
-                        Image(systemName: slice.leafClass.symbol)
-                            .foregroundStyle(slice.leafClass.color)
-                        VStack(alignment: .leading, spacing: 0) {
-                            Text(slice.leafClass.displayName)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            Text("\(slice.count) · \((aphid + healthy == 0 ? 0 : Double(slice.count) / Double(aphid + healthy)).percentText)")
-                                .font(.subheadline.weight(.semibold).monospacedDigit())
-                        }
-                    }
-                }
-            }
-        }
     }
 }
 
@@ -211,37 +146,6 @@ extension Calendar.Component {
         case .weekOfYear: .dateTime.month().day()
         default: .dateTime.month().day()
         }
-    }
-}
-
-// MARK: - Severity of logged scans
-
-struct SeverityBreakdownChart: View {
-    let counts: [InsightsStats.SeverityCount]
-
-    var body: some View {
-        Chart(counts) { item in
-            BarMark(x: .value("Scans", item.count), y: .value("Severity", item.severity.title))
-                .foregroundStyle(item.severity.color)
-                .cornerRadius(4)
-                .annotation(position: .trailing, spacing: 6) {
-                    Text(item.count, format: .number)
-                        .font(.caption.monospacedDigit())
-                        .foregroundStyle(.secondary)
-                }
-        }
-        .chartYAxis {
-            AxisMarks { value in
-                AxisValueLabel {
-                    if let title = value.as(String.self), let severity = Severity.allCases.first(where: { $0.title == title }) {
-                        Label(title, systemImage: severity.symbol)
-                            .labelStyle(.titleAndIcon)
-                    }
-                }
-            }
-        }
-        .chartXAxis(.hidden)
-        .frame(height: 170)
     }
 }
 
@@ -429,31 +333,5 @@ struct SessionPerformanceChart: View {
         .chartYScale(domain: 0...max(target * 2, (sessions.map(\.fps).max() ?? 0) * 1.1))
         .chartXSelection(value: $selectedDate)
         .frame(height: height)
-    }
-}
-
-// MARK: - Field map
-
-struct FieldMapView: View {
-    let points: [InsightsStats.MapPoint]
-    var interactive = true
-
-    var body: some View {
-        Map(initialPosition: .automatic, interactionModes: interactive ? .all : []) {
-            ForEach(points) { point in
-                Annotation(point.field, coordinate: point.coordinate, anchor: .center) {
-                    let severity = point.severity ?? .clear
-                    Image(systemName: severity.symbol)
-                        .font(.caption.weight(.bold))
-                        .foregroundStyle(.white)
-                        .frame(width: 24, height: 24)
-                        .background(severity.color, in: .circle)
-                        .overlay(Circle().strokeBorder(.white, lineWidth: 2))
-                        .accessibilityLabel("\(point.field): \(severity.title), \(point.summary.aphidCount) infested leaves")
-                }
-                .annotationTitles(.hidden)
-            }
-        }
-        .mapStyle(.hybrid(elevation: .realistic))
     }
 }

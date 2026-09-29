@@ -3,8 +3,8 @@
 //  Pepper Watch
 //
 //  Expanded view for one metric, laid out like an Apple Health detail page:
-//  range picker, headline value, full-width chart, then Highlights, related
-//  charts, About and Options. Sections flow into columns on iPad.
+//  range picker, headline value, the chart, then full-width Highlights,
+//  About and Options sections.
 //
 
 import SwiftData
@@ -20,7 +20,6 @@ struct InsightDetailView: View {
     @AppStorage(PinnedMetrics.key) private var pinnedRaw = PinnedMetrics.defaultValue
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var range: InsightsRange = .week
-    @State private var showFullMap = false
 
     private var isRegular: Bool { horizontalSizeClass == .regular }
     private var chartHeight: CGFloat { isRegular ? 340 : 240 }
@@ -33,12 +32,13 @@ struct InsightDetailView: View {
         let stats = InsightsStats(events: scopedEvents, sessions: scopedSessions, bucket: range.bucket)
 
         ScrollView {
-            VStack(alignment: .leading, spacing: 20) {
+            VStack(alignment: .leading, spacing: 24) {
                 Picker("Range", selection: $range.animation(.smooth)) {
                     ForEach(InsightsRange.allCases) { Text($0.rawValue).tag($0) }
                 }
                 .pickerStyle(.segmented)
-                .frame(maxWidth: isRegular ? 480 : .infinity)
+                .frame(maxWidth: isRegular ? 520 : .infinity)
+                .frame(maxWidth: .infinity)
 
                 headline(stats)
 
@@ -48,45 +48,11 @@ struct InsightDetailView: View {
                         .padding(.vertical, 40)
                 } else {
                     mainChart(stats, events: scopedEvents)
+                    highlightsSection(highlights(stats))
                 }
 
-                LazyVGrid(
-                    columns: [GridItem(.adaptive(minimum: isRegular ? 360 : 300), spacing: 16, alignment: .top)],
-                    alignment: .leading,
-                    spacing: 16
-                ) {
-                    if !scopedEvents.isEmpty {
-                        DetailSection(title: "Highlights") {
-                            VStack(alignment: .leading, spacing: 10) {
-                                ForEach(highlights(stats), id: \.self) { line in
-                                    Label {
-                                        Text(line).fixedSize(horizontal: false, vertical: true)
-                                    } icon: {
-                                        Image(systemName: metric.symbol).foregroundStyle(metric.tint)
-                                    }
-                                    .font(.subheadline)
-                                }
-                            }
-                        }
-                        secondaryContent(stats)
-                    }
-
-                    DetailSection(title: "About \(metric.title)") {
-                        Text(metric.about)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-
-                    DetailSection(title: "Options") {
-                        Toggle(isOn: Binding(
-                            get: { isPinned },
-                            set: { _ in withAnimation { pinnedRaw = PinnedMetrics.toggling(metric, in: pinnedRaw) } }
-                        )) {
-                            Label("Pin in Insights", systemImage: "pin.fill")
-                        }
-                    }
-                }
+                aboutSection
+                optionsSection
             }
             .padding()
         }
@@ -101,19 +67,6 @@ struct InsightDetailView: View {
             }
         }
         .sensoryFeedback(.selection, trigger: isPinned)
-        .sheet(isPresented: $showFullMap) {
-            NavigationStack {
-                FieldMapView(points: stats.mapPoints)
-                    .ignoresSafeArea(edges: .bottom)
-                    .navigationTitle("Field Hotspots")
-                    .navigationBarTitleDisplayMode(.inline)
-                    .toolbar {
-                        ToolbarItem(placement: .confirmationAction) {
-                            Button("Done", systemImage: "checkmark") { showFullMap = false }
-                        }
-                    }
-            }
-        }
     }
 
     // MARK: - Headline
@@ -151,7 +104,7 @@ struct InsightDetailView: View {
         }
     }
 
-    // MARK: - Main chart (full width, straight on the page like Health)
+    // MARK: - Chart (full width, straight on the page like Health)
 
     @ViewBuilder
     private func mainChart(_ stats: InsightsStats, events: [DetectionEvent]) -> some View {
@@ -168,7 +121,7 @@ struct InsightDetailView: View {
         case .accuracy:
             ValidationMatrixView(metrics: stats.validation)
                 .padding()
-                .background(.card, in: .rect(cornerRadius: 20))
+                .background(.elevatedCard, in: .rect(cornerRadius: 20))
         case .confidence:
             ConfidenceHistogramChart(bins: stats.confidenceBins, height: chartHeight)
         case .performance:
@@ -176,70 +129,85 @@ struct InsightDetailView: View {
         }
     }
 
-    // MARK: - Related charts
+    // MARK: - Sections
 
-    @ViewBuilder
-    private func secondaryContent(_ stats: InsightsStats) -> some View {
-        switch metric {
-        case .infestation:
-            DetailSection(title: "Scan Severity") { SeverityBreakdownChart(counts: stats.severityCounts) }
-            if let severity = stats.overallSeverity {
-                RecommendationCard(severity: severity, context: "Guidance for this period")
-            }
-        case .leafHealth:
-            DetailSection(title: "Share of Leaves") { LeafHealthDonut(aphid: stats.aphidLeaves, healthy: stats.healthyLeaves) }
-        case .scans:
-            DetailSection(title: "Scan Severity") { SeverityBreakdownChart(counts: stats.severityCounts) }
-        case .fields:
-            if !stats.mapPoints.isEmpty {
-                DetailSection(title: "Hotspots") {
-                    FieldMapView(points: stats.mapPoints, interactive: false)
-                        .frame(height: isRegular ? 300 : 220)
-                        .clipShape(.rect(cornerRadius: 16))
-                        .onTapGesture { showFullMap = true }
-                        .accessibilityAddTraits(.isButton)
-                        .accessibilityHint("Opens the full map")
+    /// Full-width card: metric label, the key finding in bold, then supporting details.
+    private func highlightsSection(_ lines: [String]) -> some View {
+        DetailSection(title: "Highlights") {
+            VStack(alignment: .leading, spacing: 10) {
+                Label(metric.title, systemImage: metric.symbol)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(metric.tint)
+                if let lead = lines.first {
+                    Text(lead)
+                        .font(.title3.weight(.semibold))
+                        .fixedSize(horizontal: false, vertical: true)
                 }
-            }
-        case .accuracy:
-            EmptyView()
-        case .confidence:
-            DetailSection(title: "By Class") {
-                HStack(spacing: 12) {
-                    ForEach(LeafClass.allCases) { leafClass in
-                        VStack(alignment: .leading, spacing: 2) {
-                            Label(leafClass.displayName, systemImage: leafClass.symbol)
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            Text(stats.meanConfidenceByClass[leafClass].map(\.percentText) ?? "—")
-                                .font(.title3.weight(.semibold).monospacedDigit())
-                        }
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-                }
-            }
-        case .performance:
-            let passing = stats.sessions.filter { $0.fps >= fpsTarget }.count
-            DetailSection(title: "Summary") {
-                HStack(spacing: 12) {
-                    detailStat("Met target", "\(passing)/\(stats.sessions.count)", caption: "≥ \(fpsTarget.fixed(0)) FPS")
-                    detailStat("Mean inference", "\(stats.averageInferenceMs.fixed(1)) ms", caption: "Per logged scan")
+                ForEach(lines.dropFirst(), id: \.self) { line in
+                    Text(line)
+                        .font(.body)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
         }
     }
 
-    private func detailStat(_ title: String, _ value: String, caption: String) -> some View {
-        VStack(alignment: .leading, spacing: 2) {
-            Text(title).font(.caption).foregroundStyle(.secondary)
-            Text(value).font(.title3.weight(.semibold).monospacedDigit())
-            Text(caption).font(.caption2).foregroundStyle(.tertiary)
+    private var aboutSection: some View {
+        DetailSection(title: "About \(metric.title)") {
+            if isRegular {
+                // iPad: full-width card, text balanced across two columns.
+                let (leading, trailing) = Self.balancedColumns(metric.about)
+                HStack(alignment: .top, spacing: 32) {
+                    aboutText(leading)
+                    aboutText(trailing)
+                }
+            } else {
+                aboutText(metric.about)
+            }
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func aboutText(_ text: String) -> some View {
+        Text(text)
+            .font(.body)
+            .foregroundStyle(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+            .frame(maxWidth: .infinity, alignment: .topLeading)
+    }
+
+    private var optionsSection: some View {
+        DetailSection(title: "Options") {
+            Toggle(isOn: Binding(
+                get: { isPinned },
+                set: { _ in withAnimation { pinnedRaw = PinnedMetrics.toggling(metric, in: pinnedRaw) } }
+            )) {
+                Label("Pin in Insights", systemImage: "pin.fill")
+            }
+        }
+    }
+
+    /// Splits text at sentence boundaries into two columns of similar length.
+    static func balancedColumns(_ text: String) -> (String, String) {
+        var sentences: [String] = []
+        text.enumerateSubstrings(in: text.startIndex..., options: .bySentences) { sentence, _, _, _ in
+            if let sentence { sentences.append(sentence.trimmingCharacters(in: .whitespaces)) }
+        }
+        guard sentences.count > 1 else { return (text, "") }
+        let half = sentences.reduce(0) { $0 + $1.count } / 2
+        var leading: [String] = []
+        var count = 0
+        for sentence in sentences where count < half {
+            leading.append(sentence)
+            count += sentence.count
+        }
+        if leading.count == sentences.count { leading.removeLast() }
+        return (leading.joined(separator: " "), sentences.dropFirst(leading.count).joined(separator: " "))
     }
 
     // MARK: - Highlights
 
+    /// The first line is the key finding; the rest support it.
     private func highlights(_ stats: InsightsStats) -> [String] {
         let format = range.bucket.dateFormat
         switch metric {
@@ -247,20 +215,22 @@ struct InsightDetailView: View {
             var lines: [String] = []
             let populated = stats.trend.filter { $0.total > 0 }
             if let peak = populated.max(by: { $0.rate < $1.rate }) {
-                lines.append("Highest was \(peak.rate.percentText) on \(peak.date.formatted(format)).")
+                lines.append("Infestation peaked at \(peak.rate.percentText) on \(peak.date.formatted(format)).")
             }
             if let low = populated.min(by: { $0.rate < $1.rate }), populated.count > 1 {
-                lines.append("Lowest was \(low.rate.percentText) on \(low.date.formatted(format)).")
+                lines.append("It was lowest at \(low.rate.percentText) on \(low.date.formatted(format)).")
             }
+            let serious = stats.severityCounts.filter { $0.severity >= .moderate }.reduce(0) { $0 + $1.count }
+            lines.append("\(serious) of \(stats.scanCount) scans were moderate or severe.")
             return lines
         case .leafHealth:
             let healthyShare = stats.totalLeaves == 0 ? 0 : Double(stats.healthyLeaves) / Double(stats.totalLeaves)
-            return ["\(healthyShare.percentText) of \(stats.totalLeaves) detected leaves were healthy.",
-                    "\(stats.aphidLeaves) leaves showed aphid damage."]
+            return ["\(healthyShare.percentText) of detected leaves were healthy.",
+                    "\(stats.healthyLeaves) healthy and \(stats.aphidLeaves) aphid-infested leaves across \(stats.scanCount) scans."]
         case .scans:
             guard let busiest = stats.trend.max(by: { $0.scans < $1.scans }) else { return [] }
             return ["Most scans were logged on \(busiest.date.formatted(format)) (\(busiest.scans)).",
-                    "\(stats.sessions.count) scanning sessions in this range."]
+                    "\(stats.scanCount) scans across \(stats.sessions.count) scanning sessions in this range."]
         case .fields:
             guard let worst = stats.fieldRates.first else { return [] }
             var lines = ["\(worst.field) has the highest infestation at \(worst.rate.percentText)."]
@@ -271,35 +241,43 @@ struct InsightDetailView: View {
         case .accuracy:
             let validation = stats.validation
             guard validation.total > 0, let precision = validation.precision, let recall = validation.recall else {
-                return ["No verified detections yet. Open a scan in History and mark each detection correct or wrong."]
+                return ["No verified detections yet.", "Open a scan in History and mark each detection as correct or wrong."]
             }
-            return ["Precision is \(precision.percentText) and recall is \(recall.percentText) across \(validation.total) verified detections.",
+            return ["Precision is \(precision.percentText) and recall is \(recall.percentText).",
+                    "Based on \(validation.total) detections verified in the field.",
                     "\(validation.falseNegatives) infested leaves were missed and \(validation.falsePositives) healthy leaves were flagged."]
         case .confidence:
             guard let mean = stats.meanConfidence else { return [] }
-            return ["Average confidence was \(mean.percentText) across \(stats.totalLeaves) boxes."]
+            var lines = ["Average confidence was \(mean.percentText) across \(stats.totalLeaves) boxes."]
+            let byClass = LeafClass.allCases.compactMap { leafClass in
+                stats.meanConfidenceByClass[leafClass].map { "\(leafClass.displayName) \($0.percentText)" }
+            }
+            if !byClass.isEmpty { lines.append("By class: \(byClass.joined(separator: ", ")).") }
+            return lines
         case .performance:
             guard let fastest = stats.sessions.max(by: { $0.fps < $1.fps }) else { return [] }
             let passing = stats.sessions.filter { $0.fps >= fpsTarget }.count
             return ["\(passing) of \(stats.sessions.count) sessions met the \(fpsTarget.fixed(0)) FPS target.",
-                    "Fastest session averaged \(fastest.fps.fixed(1)) FPS in \(fastest.field)."]
+                    "The fastest session averaged \(fastest.fps.fixed(1)) FPS in \(fastest.field).",
+                    "Mean inference time was \(stats.averageInferenceMs.fixed(1)) ms per logged scan."]
         }
     }
 }
 
-/// A titled card in the Health-style detail layout.
+/// A Health-style section: large title above a full-width card.
 private struct DetailSection<Content: View>: View {
     let title: String
     @ViewBuilder var content: Content
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
+        VStack(alignment: .leading, spacing: 10) {
             Text(title)
-                .font(.headline)
+                .font(.title2.weight(.bold))
+                .padding(.horizontal, 4)
             content
+                .padding()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(.elevatedCard, in: .rect(cornerRadius: 20))
         }
-        .padding()
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.card, in: .rect(cornerRadius: 20))
     }
 }
