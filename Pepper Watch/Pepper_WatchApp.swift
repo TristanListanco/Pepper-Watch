@@ -10,9 +10,6 @@ import SwiftUI
 
 @main
 struct Pepper_WatchApp: App {
-    /// The iCloud choice decides how the data store is created, so it comes before anything else.
-    @AppStorage(SyncSettings.choiceMadeKey) private var hasChosenSync = false
-
     init() {
         AppSettings.registerDefaults()
         PepperWatchTips.configure()
@@ -20,16 +17,12 @@ struct Pepper_WatchApp: App {
 
     var body: some Scene {
         WindowGroup {
-            if hasChosenSync {
-                AppRootView()
-            } else {
-                CloudSyncOnboardingView()
-            }
+            AppRootView()
         }
     }
 }
 
-/// Long-lived services, created once after the iCloud choice has been made.
+/// Long-lived services, created once when the app starts.
 final class AppServices {
     static let shared = AppServices()
 
@@ -76,10 +69,7 @@ struct AppRootView: View {
             .environment(\.systemLogger, services.logger)
             .modelContainer(services.container)
             .task { await services.engine.configure(AppSettings.detectorConfiguration) }
-            .task {
-                services.widgetSync.start()
-                services.logger.log(category: "sync", AppDataStore.isSyncingWithICloud ? "Data syncs with iCloud" : "Data is stored on this device only")
-            }
+            .task { services.widgetSync.start() }
             .onChange(of: scenePhase) { _, phase in
                 // Make sure widgets have the latest numbers when the user leaves the app.
                 if phase == .background { services.widgetSync.update() }

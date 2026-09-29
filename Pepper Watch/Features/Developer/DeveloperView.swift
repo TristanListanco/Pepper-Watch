@@ -27,8 +27,6 @@ struct DeveloperView: View {
     @AppStorage(SettingsKey.strictGeofence) private var strictGeofence = false
     @AppStorage(SettingsKey.fpsTarget) private var fpsTarget = 17.0
     @State private var showsWidgetGallery = Self.opensWidgetGallery
-    @AppStorage(SyncSettings.enabledKey) private var iCloudSyncEnabled = false
-    @State private var iCloudStatus: ICloudAccount.Status = .checking
 
     /// Debug builds accept `-PWDeveloperPage widgets` to open the widget gallery for screenshots.
     private static var opensWidgetGallery: Bool {
@@ -56,7 +54,6 @@ struct DeveloperView: View {
                 overlaySection
                 loggingSection
                 diagnosticsSection
-                iCloudSection
                 siriSection
                 DataManagementSection()
                 aboutSection
@@ -207,23 +204,6 @@ struct DeveloperView: View {
         } footer: {
             Text("The thesis requires at least 17 FPS for real-time processing. Tips reappear the next time you open the app.")
         }
-    }
-
-    private var iCloudSection: some View {
-        Section {
-            LabeledContent {
-                Text(iCloudStatus == .checking ? "…" : (iCloudStatus == .available ? "Signed in" : "Not available"))
-            } label: {
-                Label(iCloudStatus.title, systemImage: iCloudStatus.symbol)
-            }
-            Toggle("Sync with iCloud", isOn: $iCloudSyncEnabled)
-            LabeledContent("Now", value: AppDataStore.isSyncingWithICloud ? "Syncing with iCloud" : "On this device only")
-        } header: {
-            Text("iCloud")
-        } footer: {
-            Text("Fields, scans, photos and logs sync through your private iCloud database. Changing this takes effect the next time you open Pepper Watch.")
-        }
-        .task { iCloudStatus = await ICloudAccount.status() }
     }
 
     private var siriSection: some View {
