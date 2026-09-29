@@ -16,6 +16,7 @@ struct DetectionDetailView: View {
     @State private var highlightedID: Detection.ID?
     @State private var shareImage: Image?
     @State private var isConfirmingDelete = false
+    @State private var isViewingFullScreen = false
 
     private var sortedBoxes: [BoundingBox] {
         event.boxes.sorted { $0.confidence > $1.confidence }
@@ -27,6 +28,18 @@ struct DetectionDetailView: View {
                 AnnotatedImageView(imageData: event.imageData, detections: event.detections, highlightedID: highlightedID)
                     .clipShape(.rect(cornerRadius: 20))
                     .animation(.smooth, value: highlightedID)
+                    .overlay(alignment: .bottomTrailing) {
+                        if event.imageData != nil {
+                            Image(systemName: "arrow.up.left.and.arrow.down.right")
+                                .font(.caption.weight(.bold))
+                                .padding(8)
+                                .glassEffect(.regular, in: .circle)
+                                .padding(10)
+                        }
+                    }
+                    .onTapGesture { if event.imageData != nil { isViewingFullScreen = true } }
+                    .accessibilityAddTraits(.isButton)
+                    .accessibilityHint("Opens the photo full screen with pinch to zoom")
 
                 summary
 
@@ -67,6 +80,9 @@ struct DetectionDetailView: View {
                 try? modelContext.save()
                 dismiss()
             }
+        }
+        .fullScreenCover(isPresented: $isViewingFullScreen) {
+            ZoomableImageViewer(imageData: event.imageData, detections: event.detections)
         }
         .task(id: event.id) {
             if let data = event.imageData { decodedImage = UIImage(data: data) }
@@ -140,6 +156,8 @@ struct DetectionDetailView: View {
         VStack(alignment: .leading, spacing: 0) {
             DetailRow(title: "Field", value: event.fieldName.isEmpty ? "—" : event.fieldName, symbol: "mappin.and.ellipse")
             Divider()
+            DetailRow(title: "Location check", value: verificationText, symbol: verificationSymbol)
+            Divider()
             DetailRow(title: "Source", value: event.source.title, symbol: event.source.symbol)
             Divider()
             DetailRow(title: "Inference", value: "\(event.inferenceMs.fixed(1)) ms", symbol: "cpu")
@@ -172,6 +190,22 @@ struct DetectionDetailView: View {
         }
         .padding(.horizontal)
         .background(.card, in: .rect(cornerRadius: 24))
+    }
+
+    private var verificationText: String {
+        switch event.geofenceVerified {
+        case true?: "Inside field boundary"
+        case false?: "Outside field boundary"
+        case nil: event.source == .photo ? "Photo import" : "Not checked"
+        }
+    }
+
+    private var verificationSymbol: String {
+        switch event.geofenceVerified {
+        case true?: "checkmark.seal"
+        case false?: "location.slash"
+        case nil: "questionmark.circle"
+        }
     }
 
     private func renderShareImage() {

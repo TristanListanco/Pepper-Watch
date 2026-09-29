@@ -15,12 +15,13 @@ struct Pepper_WatchApp: App {
     @State private var engine: DetectionEngine
     @State private var scanner: ScanModel
     @State private var location: LocationProvider
+    @State private var geofence: GeofenceService
     @State private var deviceMonitor = DeviceMonitor()
 
     init() {
         AppSettings.registerDefaults()
 
-        let schema = Schema([ScanSession.self, DetectionEvent.self, BoundingBox.self, SystemLog.self])
+        let schema = AppSchema.schema
         let container: ModelContainer
         do {
             container = try ModelContainer(for: schema)
@@ -41,10 +42,14 @@ struct Pepper_WatchApp: App {
         let logger = SystemLogger(context: container.mainContext)
         let engine = DetectionEngine(logger: logger)
         let location = LocationProvider()
+        let geofence = GeofenceService(logger: logger)
         self.logger = logger
         _engine = State(initialValue: engine)
         _location = State(initialValue: location)
-        _scanner = State(initialValue: ScanModel(context: container.mainContext, engine: engine, logger: logger, location: location))
+        _geofence = State(initialValue: geofence)
+        _scanner = State(initialValue: ScanModel(
+            context: container.mainContext, engine: engine, logger: logger, location: location, geofence: geofence
+        ))
     }
 
     var body: some Scene {
@@ -53,6 +58,7 @@ struct Pepper_WatchApp: App {
                 .environment(engine)
                 .environment(scanner)
                 .environment(location)
+                .environment(geofence)
                 .environment(deviceMonitor)
                 .environment(\.systemLogger, logger)
                 .task { await engine.configure(AppSettings.detectorConfiguration) }

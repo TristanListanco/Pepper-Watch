@@ -17,7 +17,7 @@ private extension View {
     }
 }
 
-private struct ChartTooltip<Content: View>: View {
+struct ChartTooltip<Content: View>: View {
     @ViewBuilder var content: Content
 
     var body: some View {
@@ -96,12 +96,13 @@ struct LeafHealthDonut: View {
 // MARK: - Infestation trend
 
 struct InfestationTrendChart: View {
-    let daily: [InsightsStats.DailyPoint]
-    @State private var selectedDay: Date?
+    let trend: [InsightsStats.TrendPoint]
+    var unit: Calendar.Component = .day
+    @State private var selectedDate: Date?
 
-    private var selectedPoint: InsightsStats.DailyPoint? {
-        guard let selectedDay else { return nil }
-        return daily.first { Calendar.current.isDate($0.day, inSameDayAs: selectedDay) }
+    private var selectedPoint: InsightsStats.TrendPoint? {
+        guard let selectedDate else { return nil }
+        return trend.first { Calendar.current.isDate($0.date, equalTo: selectedDate, toGranularity: unit) }
     }
 
     var body: some View {
@@ -118,25 +119,25 @@ struct InfestationTrendChart: View {
                     }
             }
 
-            ForEach(daily) { point in
-                AreaMark(x: .value("Day", point.day, unit: .day), y: .value("Infested", point.rate))
+            ForEach(trend) { point in
+                AreaMark(x: .value("Date", point.date, unit: unit), y: .value("Infested", point.rate))
                     .foregroundStyle(LinearGradient(colors: [lineColor.opacity(0.25), lineColor.opacity(0)], startPoint: .top, endPoint: .bottom))
                     .interpolationMethod(.monotone)
-                LineMark(x: .value("Day", point.day, unit: .day), y: .value("Infested", point.rate))
+                LineMark(x: .value("Date", point.date, unit: unit), y: .value("Infested", point.rate))
                     .foregroundStyle(lineColor)
                     .lineStyle(StrokeStyle(lineWidth: 2))
                     .interpolationMethod(.monotone)
-                PointMark(x: .value("Day", point.day, unit: .day), y: .value("Infested", point.rate))
+                PointMark(x: .value("Date", point.date, unit: unit), y: .value("Infested", point.rate))
                     .foregroundStyle(lineColor)
-                    .symbolSize(selectedPoint?.day == point.day ? 90 : 30)
+                    .symbolSize(selectedPoint?.date == point.date ? 90 : 30)
             }
 
             if let selectedPoint {
-                RuleMark(x: .value("Day", selectedPoint.day, unit: .day))
+                RuleMark(x: .value("Date", selectedPoint.date, unit: unit))
                     .foregroundStyle(.secondary.opacity(0.4))
                     .annotation(position: .top, overflowResolution: .init(x: .fit(to: .chart), y: .disabled)) {
                         ChartTooltip {
-                            Text(selectedPoint.day, format: .dateTime.month().day())
+                            Text(selectedPoint.date, format: unit.dateFormat)
                                 .foregroundStyle(.secondary)
                             Text("\(selectedPoint.rate.percentText) infested")
                                 .font(.caption.weight(.semibold))
@@ -155,35 +156,36 @@ struct InfestationTrendChart: View {
                 }
             }
         }
-        .chartXSelection(value: $selectedDay)
-        .frame(height: 220)
+        .chartXSelection(value: $selectedDate)
+        .frame(height: 240)
     }
 }
 
 // MARK: - Daily detections by class
 
 struct DailyDetectionsChart: View {
-    let counts: [InsightsStats.DailyClassCount]
-    @State private var selectedDay: Date?
+    let counts: [InsightsStats.ClassCount]
+    var unit: Calendar.Component = .day
+    @State private var selectedDate: Date?
 
     var body: some View {
         Chart {
             ForEach(counts) { item in
-                BarMark(x: .value("Day", item.day, unit: .day), y: .value("Leaves", item.count))
+                BarMark(x: .value("Date", item.date, unit: unit), y: .value("Leaves", item.count))
                     .foregroundStyle(by: .value("Class", item.leafClass.displayName))
                     .cornerRadius(3)
             }
-            if let selectedDay {
-                let dayCounts = counts.filter { Calendar.current.isDate($0.day, inSameDayAs: selectedDay) }
-                if let first = dayCounts.first {
-                    RuleMark(x: .value("Day", first.day, unit: .day))
+            if let selectedDate {
+                let bucketCounts = counts.filter { Calendar.current.isDate($0.date, equalTo: selectedDate, toGranularity: unit) }
+                if let first = bucketCounts.first {
+                    RuleMark(x: .value("Date", first.date, unit: unit))
                         .foregroundStyle(.secondary.opacity(0.15))
                         .lineStyle(StrokeStyle(lineWidth: 16))
                         .annotation(position: .top, overflowResolution: .init(x: .fit(to: .chart), y: .disabled)) {
                             ChartTooltip {
-                                Text(first.day, format: .dateTime.month().day())
+                                Text(first.date, format: unit.dateFormat)
                                     .foregroundStyle(.secondary)
-                                ForEach(dayCounts) { item in
+                                ForEach(bucketCounts) { item in
                                     Label("\(item.leafClass.displayName): \(item.count)", systemImage: item.leafClass.symbol)
                                 }
                             }
@@ -193,8 +195,20 @@ struct DailyDetectionsChart: View {
         }
         .leafClassColorScale()
         .chartLegend(position: .top, alignment: .leading)
-        .chartXSelection(value: $selectedDay)
-        .frame(height: 220)
+        .chartXSelection(value: $selectedDate)
+        .frame(height: 240)
+    }
+}
+
+extension Calendar.Component {
+    /// Tooltip date format that matches the bucket size.
+    var dateFormat: Date.FormatStyle {
+        switch self {
+        case .hour: .dateTime.hour().minute()
+        case .month: .dateTime.month(.wide).year()
+        case .weekOfYear: .dateTime.month().day()
+        default: .dateTime.month().day()
+        }
     }
 }
 

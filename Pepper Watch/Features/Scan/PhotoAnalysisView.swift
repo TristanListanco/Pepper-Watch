@@ -19,11 +19,11 @@ struct PhotoAnalysis: Identifiable {
 /// Result sheet for running the detector on a photo from the library.
 struct PhotoAnalysisView: View {
     let analysis: PhotoAnalysis
+    var field: Field?
 
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
     @Environment(\.systemLogger) private var logger
-    @AppStorage(SettingsKey.fieldName) private var fieldName = "Field A"
     @State private var isSaving = false
     @State private var isSaved = false
 
@@ -84,7 +84,7 @@ struct PhotoAnalysisView: View {
         let encoded = await ImageEncoder.encode(analysis.image)
         let event = DetectionEvent(
             source: .photo,
-            fieldName: fieldName,
+            fieldName: field?.name ?? "",
             inferenceMs: analysis.inferenceMs,
             imageSize: analysis.imageSize,
             summary: analysis.summary
@@ -92,6 +92,7 @@ struct PhotoAnalysisView: View {
         event.imageData = encoded.image
         event.thumbnailData = encoded.thumbnail
         modelContext.insert(event)
+        event.field = field
         event.boxes = analysis.detections.map(BoundingBox.init)
         try? modelContext.save()
         logger?.log(category: "history", "Saved photo analysis with \(analysis.detections.count) detections")

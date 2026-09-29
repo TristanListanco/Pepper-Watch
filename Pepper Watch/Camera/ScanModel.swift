@@ -44,6 +44,10 @@ final class ScanModel {
     private(set) var sessionStartedAt: Date?
     private(set) var eventsLoggedThisSession = 0
     private(set) var snapshotCount = 0
+    /// The field being scanned. Detections are logged to it and verified against its geofence.
+    private(set) var field: Field?
+    /// The user chose to keep logging while outside the field (not allowed in strict mode).
+    var allowsLoggingOutsideField = false
 
     let camera = CameraService()
 
@@ -51,6 +55,7 @@ final class ScanModel {
     @ObservationIgnored private let engine: DetectionEngine
     @ObservationIgnored private let logger: SystemLogger
     @ObservationIgnored private let location: LocationProvider
+    @ObservationIgnored private let geofence: GeofenceService
     @ObservationIgnored private var backgroundTasks: [Task<Void, Never>] = []
     @ObservationIgnored private var isActive = false
     @ObservationIgnored private var latestFrame: FrameResult?
@@ -67,11 +72,12 @@ final class ScanModel {
     @ObservationIgnored private var inferenceTotalMs = 0.0
     @ObservationIgnored private var peakAphidCount = 0
 
-    init(context: ModelContext, engine: DetectionEngine, logger: SystemLogger, location: LocationProvider) {
+    init(context: ModelContext, engine: DetectionEngine, logger: SystemLogger, location: LocationProvider, geofence: GeofenceService) {
         self.context = context
         self.engine = engine
         self.logger = logger
         self.location = location
+        self.geofence = geofence
 
         let camera = camera
         backgroundTasks = [
@@ -95,7 +101,23 @@ final class ScanModel {
 
     // MARK: - Lifecycle
 
-    func start() async {
+    /// Current geofence verdict for the active field.
+    var geofenceStatus: GeofenceStatus? {
+        field.map { geofence.status(for: $0.region, location: location.lastLocation) }
+    }
+
+    /// Logging is paused outside the field unless the user explicitly allowed it.
+    var isLoggingBlockedByGeofence: Bool {
+        guard geofenceStatus?.presence == .outside else { return false }
+        return AppSettings.strictGeofence || !allowsLoggingOutsideField
+    }
+
+    func start(field: Field) async {
+        if self.field?.id != field.id {
+            stop()
+            allowsLoggingOutsideField = false
+        }
+        self.field = field
         isActive = true
         guard status != .running, status != .starting else { return }
 
@@ -128,17 +150,15 @@ final class ScanModel {
         camera.setPaused(isPaused)
         camera.start()
         if isTorchOn { camera.setTorch(true) }
-        if AppSettings.geotagEnabled { location.start() }
         beginSession()
         status = .running
-        logger.log(category: "camera", "Scanning started in \(AppSettings.fieldName) (\(AppSettings.captureQuality.title))")
+        logger.log(category: "camera", "Scanning started in \(field.name) (\(AppSettings.captureQuality.title))")
     }
 
     func stop() {
         isActive = false
         guard status == .running else { return }
         camera.stop()
-        location.stop()
         endSession()
         status = .idle
         detections = []
@@ -173,7 +193,7 @@ final class ScanModel {
 
     /// Saves the most recently analyzed frame with its detections (thesis "Capture & Export Controls").
     func captureSnapshot() {
-        guard let latestFrame else { return }
+        guard let latestFrame, !isLoggingBlockedByGeofence else { return }
         record(latestFrame, source: .snapshot)
         snapshotCount += 1
     }
@@ -231,7 +251,7 @@ final class ScanModel {
     }
 
     private func autoLogIfNeeded(_ frame: FrameResult) {
-        guard AppSettings.autoLogEnabled, !frame.detections.isEmpty else { return }
+        guard AppSettings.autoLogEnabled, !frame.detections.isEmpty, !isLoggingBlockedByGeofence else { return }
         if AppSettings.autoLogRequiresAphids, summary.aphidCount == 0 { return }
         guard Date.now.timeIntervalSince(lastAutoLogAt) >= AppSettings.autoLogInterval else { return }
         lastAutoLogAt = .now
@@ -258,7 +278,7 @@ final class ScanModel {
         let summary = DetectionSummary(frame.detections)
         let event = DetectionEvent(
             source: source,
-            fieldName: AppSettings.fieldName,
+            fieldName: field?.name ?? "",
             inferenceMs: frame.inferenceMs,
             imageSize: frame.imageSize,
             summary: summary
@@ -267,8 +287,14 @@ final class ScanModel {
             event.latitude = coordinate.latitude
             event.longitude = coordinate.longitude
         }
+        switch geofenceStatus?.presence {
+        case .inside: event.geofenceVerified = true
+        case .outside: event.geofenceVerified = false
+        case .unknown, nil: event.geofenceVerified = nil
+        }
         context.insert(event)
         event.session = session
+        event.field = field
         event.boxes = frame.detections.map(BoundingBox.init)
         eventsLoggedThisSession += 1
 
@@ -281,8 +307,9 @@ final class ScanModel {
     }
 
     private func beginSession() {
-        let session = ScanSession(fieldName: AppSettings.fieldName, computeUnits: engine.activeComputeUnits?.shortTitle ?? "—")
+        let session = ScanSession(fieldName: field?.name ?? "", computeUnits: engine.activeComputeUnits?.shortTitle ?? "—")
         context.insert(session)
+        session.field = field
         self.session = session
         sessionStartedAt = session.startedAt
         eventsLoggedThisSession = 0

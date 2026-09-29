@@ -7,7 +7,7 @@ import PhotosUI
 import SwiftUI
 
 struct ScanView: View {
-    let isSelected: Bool
+    let field: Field
 
     @Environment(ScanModel.self) private var scanner
     @Environment(DetectionEngine.self) private var engine
@@ -18,19 +18,18 @@ struct ScanView: View {
     @AppStorage(SettingsKey.showConfidence) private var showConfidence = true
     @AppStorage(SettingsKey.showPerformanceHUD) private var showPerformanceHUD = true
     @AppStorage(SettingsKey.hapticsEnabled) private var hapticsEnabled = true
-    @AppStorage(SettingsKey.fieldName) private var fieldName = "Field A"
+    @AppStorage(SettingsKey.strictGeofence) private var strictGeofence = false
     @AppStorage(SettingsKey.fpsTarget) private var fpsTarget = 17.0
 
     @State private var photoItem: PhotosPickerItem?
     @State private var photoAnalysis: PhotoAnalysis?
     @State private var isAnalyzingPhoto = false
     @State private var showGuidance = false
-    @State private var isRenamingField = false
-    @State private var fieldNameDraft = ""
+    @State private var isVisible = false
     @State private var flashOpacity = 0.0
     @Namespace private var glassNamespace
 
-    private var isActive: Bool { isSelected && scenePhase == .active }
+    private var isActive: Bool { isVisible && scenePhase == .active }
 
     var body: some View {
         ZStack {
@@ -38,14 +37,23 @@ struct ScanView: View {
             content
             Color.white.opacity(flashOpacity).ignoresSafeArea().allowsHitTesting(false)
         }
+        .navigationTitle(field.name)
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbarBackground(.hidden, for: .navigationBar)
+        .toolbarColorScheme(.dark, for: .navigationBar)
+        .toolbar(.hidden, for: .tabBar)
+        .onAppear { isVisible = true }
+        .onDisappear {
+            isVisible = false
+            scanner.stop()
+        }
         .task(id: isActive) {
             if isActive {
-                await scanner.start()
+                await scanner.start(field: field)
             } else {
                 scanner.stop()
             }
         }
-        .onDisappear { scanner.stop() }
         .onChange(of: photoItem) { _, item in
             guard let item else { return }
             Task { await analyzePhoto(item) }
@@ -60,7 +68,7 @@ struct ScanView: View {
             return .warning
         }
         .sheet(item: $photoAnalysis) { analysis in
-            PhotoAnalysisView(analysis: analysis)
+            PhotoAnalysisView(analysis: analysis, field: field)
         }
         .sheet(isPresented: $showGuidance) {
             NavigationStack {
@@ -77,16 +85,6 @@ struct ScanView: View {
                 }
             }
             .presentationDetents([.medium, .large])
-        }
-        .alert("Field Name", isPresented: $isRenamingField) {
-            TextField("Field A", text: $fieldNameDraft)
-            Button("Cancel", role: .cancel) {}
-            Button("Save") {
-                let trimmed = fieldNameDraft.trimmingCharacters(in: .whitespacesAndNewlines)
-                if !trimmed.isEmpty { fieldName = trimmed }
-            }
-        } message: {
-            Text("New detections will be tagged with this field or plot name.")
         }
     }
 
@@ -152,16 +150,9 @@ struct ScanView: View {
     private var topBar: some View {
         GlassEffectContainer(spacing: 12) {
             HStack(alignment: .top) {
-                Button {
-                    fieldNameDraft = fieldName
-                    isRenamingField = true
-                } label: {
-                    Label(fieldName, systemImage: "mappin.and.ellipse")
-                        .font(.subheadline.weight(.semibold))
-                        .lineLimit(1)
-                }
-                .buttonStyle(.glass)
-                .accessibilityHint("Rename the field for new detections")
+                GeofenceBadge(status: scanner.geofenceStatus, fieldName: field.name)
+                    .glassEffect(.regular, in: .capsule)
+                    .glassEffectID("geofence", in: glassNamespace)
 
                 Spacer()
 
@@ -206,10 +197,50 @@ struct ScanView: View {
     private var bottomPanel: some View {
         GlassEffectContainer(spacing: 16) {
             VStack(spacing: 14) {
+                if let status = scanner.geofenceStatus, status.presence == .outside {
+                    outsideFieldBanner(status)
+                }
                 guidancePanel
                 controls
             }
         }
+    }
+
+    private func outsideFieldBanner(_ status: GeofenceStatus) -> some View {
+        let isBlocked = scanner.isLoggingBlockedByGeofence
+        return VStack(alignment: .leading, spacing: 10) {
+            Label {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("Outside \(field.name)")
+                        .font(.subheadline.weight(.semibold))
+                    Text(isBlocked
+                         ? "\(status.distanceToEdge?.distanceText ?? "Some distance") from the boundary. Detections aren't being logged."
+                         : "Logging anyway. These scans are marked unverified.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            } icon: {
+                Image(systemName: "location.slash.fill")
+                    .foregroundStyle(Severity.low.color)
+            }
+            HStack(spacing: 10) {
+                Button("Directions", systemImage: "figure.walk") {
+                    PlaceNamer.openDirections(to: field.region)
+                }
+                .buttonStyle(.glass)
+                if isBlocked, !strictGeofence {
+                    Button("Scan Anyway", systemImage: "exclamationmark.triangle") {
+                        scanner.allowsLoggingOutsideField = true
+                    }
+                    .buttonStyle(.glass)
+                }
+            }
+            .font(.caption.weight(.semibold))
+        }
+        .padding(14)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .glassEffect(.regular.tint(Severity.low.color.opacity(0.25)), in: .rect(cornerRadius: 22))
+        .transition(.move(edge: .bottom).combined(with: .opacity))
     }
 
     private var guidancePanel: some View {
@@ -265,7 +296,7 @@ struct ScanView: View {
             CircleGlassButton(title: "Capture Snapshot", systemImage: "camera.shutter.button.fill", diameter: 56, isProminent: true) {
                 scanner.captureSnapshot()
             }
-            .disabled(scanner.status != .running)
+            .disabled(scanner.status != .running || scanner.isLoggingBlockedByGeofence)
 
             CircleGlassButton(
                 title: scanner.isTorchOn ? "Turn Off Light" : "Turn On Light",
@@ -362,7 +393,9 @@ private struct CircleGlassButton: View {
 }
 
 #Preview {
-    ScanView(isSelected: false)
-        .environment(PreviewSupport.scanner)
-        .environment(PreviewSupport.engine)
+    NavigationStack {
+        ScanView(field: Field(name: "North Plot", locationName: "Claveria", latitude: 8.61, longitude: 124.89, radiusMeters: 100))
+    }
+    .environment(PreviewSupport.scanner)
+    .environment(PreviewSupport.engine)
 }

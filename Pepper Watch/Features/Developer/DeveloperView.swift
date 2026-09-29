@@ -23,7 +23,7 @@ struct DeveloperView: View {
     @AppStorage(SettingsKey.autoLogRequiresAphids) private var autoLogRequiresAphids = false
     @AppStorage(SettingsKey.geotagEnabled) private var geotagEnabled = true
     @AppStorage(SettingsKey.healthLogInterval) private var healthLogInterval = 30.0
-    @AppStorage(SettingsKey.fieldName) private var fieldName = "Field A"
+    @AppStorage(SettingsKey.strictGeofence) private var strictGeofence = false
     @AppStorage(SettingsKey.fpsTarget) private var fpsTarget = 17.0
 
     private var detectorConfiguration: DetectorConfiguration {
@@ -141,10 +141,6 @@ struct DeveloperView: View {
 
     private var loggingSection: some View {
         Section {
-            LabeledContent("Field name") {
-                TextField("Field A", text: $fieldName)
-                    .multilineTextAlignment(.trailing)
-            }
             Toggle("Auto-log detections", isOn: $autoLogEnabled)
             if autoLogEnabled {
                 Stepper(value: $autoLogInterval, in: 1...30, step: 1) {
@@ -153,6 +149,7 @@ struct DeveloperView: View {
                 Toggle("Only when aphids are found", isOn: $autoLogRequiresAphids)
             }
             Toggle("Geotag detections", isOn: $geotagEnabled)
+            Toggle("Strict geofence", isOn: $strictGeofence)
             Picker("Health log interval", selection: $healthLogInterval) {
                 Text("15 s").tag(15.0)
                 Text("30 s").tag(30.0)
@@ -162,7 +159,7 @@ struct DeveloperView: View {
         } header: {
             Text("Logging")
         } footer: {
-            Text("Everything stays on this device. Auto-logging saves a frame, its bounding boxes and timestamp at the chosen interval while leaves are in view.")
+            Text("Everything stays on this device. Auto-logging saves a frame, its bounding boxes and timestamp at the chosen interval while leaves are in view. Strict geofence blocks logging outside a field's boundary with no “Scan Anyway” override.")
         }
     }
 
@@ -211,6 +208,7 @@ private struct DataManagementSection: View {
     @Query private var events: [DetectionEvent]
     @Query private var sessions: [ScanSession]
     @Query private var logs: [SystemLog]
+    @Query private var fields: [Field]
     @Environment(\.modelContext) private var modelContext
     @Environment(\.systemLogger) private var logger
     @State private var isConfirmingErase = false
@@ -218,6 +216,7 @@ private struct DataManagementSection: View {
 
     var body: some View {
         Section {
+            LabeledContent("Fields", value: fields.count.formatted())
             LabeledContent("Detection events", value: events.count.formatted())
             LabeledContent("Bounding boxes", value: events.reduce(0) { $0 + $1.aphidCount + $1.healthyCount }.formatted())
             LabeledContent("Scan sessions", value: sessions.count.formatted())
@@ -251,7 +250,7 @@ private struct DataManagementSection: View {
             Button("Erase All Data", systemImage: "trash", role: .destructive) {
                 isConfirmingErase = true
             }
-            .disabled(events.isEmpty && sessions.isEmpty && logs.isEmpty)
+            .disabled(events.isEmpty && sessions.isEmpty && logs.isEmpty && fields.isEmpty)
         } header: {
             Text("Local Data")
         } footer: {
@@ -263,7 +262,7 @@ private struct DataManagementSection: View {
                 eraseAll()
             }
         } message: {
-            Text("Deletes every scan, image, session and log entry. This can't be undone.")
+            Text("Deletes every field, scan, image, session and log entry. This can't be undone.")
         }
     }
 
@@ -271,6 +270,7 @@ private struct DataManagementSection: View {
         for event in events { modelContext.delete(event) }
         for session in sessions { modelContext.delete(session) }
         for log in logs { modelContext.delete(log) }
+        for field in fields { modelContext.delete(field) }
         try? modelContext.save()
         logger?.log(.warning, category: "data", "All local data erased")
         refreshStorage()
