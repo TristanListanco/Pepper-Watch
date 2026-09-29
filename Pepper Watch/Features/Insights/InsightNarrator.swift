@@ -23,10 +23,17 @@ nonisolated struct FieldInsightReport {
 }
 
 /// What the highlights card shows, whether generated or rule-based.
-struct HighlightContent: Equatable {
+struct HighlightContent: Equatable, Codable {
     var headline: String?
     var observations: [String] = []
     var recommendation: String?
+}
+
+/// A generated summary saved on device so it's reused until the underlying numbers change.
+private struct CachedReport: Codable {
+    var facts: String
+    var content: HighlightContent
+    var generatedAt: Date
 }
 
 @Observable
@@ -41,9 +48,14 @@ final class InsightNarrator {
 
     private(set) var phase: Phase = .idle
     private(set) var content = HighlightContent()
+    /// When the shown summary was generated (restored from cache or just created).
+    private(set) var generatedAt: Date?
 
-    @ObservationIgnored private var lastFacts: String?
+    @ObservationIgnored private var lastRequest: (facts: String, scope: String)?
     @ObservationIgnored private var generation: Task<Void, Never>?
+
+    private static let cacheKey = "insights.aiReportCache"
+    private static let maximumCachedScopes = 12
 
     private static let instructions = """
     You are the scouting assistant in Pepper Watch, an offline app that detects aphid damage on bell pepper \
@@ -71,19 +83,28 @@ final class InsightNarrator {
         }
     }
 
-    /// Regenerates only when the underlying facts change, unless forced.
-    func refresh(facts: String, force: Bool = false) {
-        guard force || facts != lastFacts else { return }
+    /// Shows the cached summary for `scope` when the facts are unchanged; generates a new one only
+    /// when the numbers changed or the user asks to regenerate.
+    func refresh(facts: String, scope: String, force: Bool = false) {
+        if !force, let lastRequest, lastRequest.facts == facts, lastRequest.scope == scope { return }
+        lastRequest = (facts, scope)
+
+        if !force, let cached = Self.loadCache()[scope], cached.facts == facts {
+            generation?.cancel()
+            content = cached.content
+            generatedAt = cached.generatedAt
+            phase = .generated
+            return
+        }
         if let reason = Self.unavailableReason {
             phase = .unavailable(reason)
             return
         }
-        lastFacts = facts
         generation?.cancel()
-        generation = Task { await generate(from: facts) }
+        generation = Task { await generate(from: facts, scope: scope) }
     }
 
-    private func generate(from facts: String) async {
+    private func generate(from facts: String, scope: String) async {
         phase = .generating
         content = HighlightContent()
         let session = LanguageModelSession(instructions: Self.instructions)
@@ -97,12 +118,35 @@ final class InsightNarrator {
                     recommendation: snapshot.content.recommendation
                 )
             }
+            generatedAt = .now
             phase = .generated
+            Self.save(CachedReport(facts: facts, content: content, generatedAt: .now), for: scope)
         } catch is CancellationError {
             // A newer request replaced this one.
         } catch {
-            lastFacts = nil
+            lastRequest = nil
             phase = .failed(error.localizedDescription)
+        }
+    }
+
+    private static func loadCache() -> [String: CachedReport] {
+        guard let data = UserDefaults.standard.data(forKey: cacheKey),
+              let cache = try? JSONDecoder().decode([String: CachedReport].self, from: data)
+        else { return [:] }
+        return cache
+    }
+
+    private static func save(_ report: CachedReport, for scope: String) {
+        var cache = loadCache()
+        cache[scope] = report
+        if cache.count > maximumCachedScopes {
+            // Drop the oldest summaries first.
+            for key in cache.sorted(by: { $0.value.generatedAt < $1.value.generatedAt }).prefix(cache.count - maximumCachedScopes).map(\.key) {
+                cache[key] = nil
+            }
+        }
+        if let data = try? JSONEncoder().encode(cache) {
+            UserDefaults.standard.set(data, forKey: cacheKey)
         }
     }
 }
@@ -133,7 +177,7 @@ enum InsightDigest {
             lines.append("Infestation by field: \(fields.joined(separator: "; ")).")
         }
         if let latest, let severity = latest.severity {
-            lines.append("Latest scan: \(severity.title.lowercased()) in \(latest.fieldName.isEmpty ? "an unnamed field" : latest.fieldName), \(latest.timestamp.formatted(.relative(presentation: .named))).")
+            lines.append("Latest scan: \(severity.title.lowercased()) in \(latest.fieldName.isEmpty ? "an unnamed field" : latest.fieldName) on \(latest.timestamp.formatted(.dateTime.month(.abbreviated).day())).")
         }
         let validation = current.validation
         if validation.total > 0, let precision = validation.precision, let recall = validation.recall {

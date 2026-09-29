@@ -39,8 +39,10 @@ struct FieldsHomeView: View {
                 if horizontalSizeClass == .regular {
                     // iPad: recommendation and map side by side.
                     HStack(alignment: .top, spacing: 16) {
+                        // Stretch the card to the row height so it lines up with the map.
                         recommendationCard
-                            .frame(maxWidth: .infinity)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+                            .background(.card, in: .rect(cornerRadius: 24))
                         FieldsOverviewMap(fields: fields)
                             .frame(maxWidth: .infinity, minHeight: 260, maxHeight: .infinity)
                             .clipShape(.rect(cornerRadius: 24))
@@ -48,6 +50,7 @@ struct FieldsHomeView: View {
                     .fixedSize(horizontal: false, vertical: true)
                 } else {
                     recommendationCard
+                        .background(.card, in: .rect(cornerRadius: 24))
                     FieldsOverviewMap(fields: fields)
                         .frame(height: 200)
                         .clipShape(.rect(cornerRadius: 24))
@@ -193,7 +196,6 @@ struct FieldsHomeView: View {
         }
         .padding()
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.card, in: .rect(cornerRadius: 24))
         .animation(.smooth, value: location.lastLocation == nil)
     }
 
