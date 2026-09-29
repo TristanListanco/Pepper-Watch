@@ -147,7 +147,9 @@ final class ScanModel {
         }
         guard isActive else { status = .idle; return }
 
-        camera.setPaused(isPaused)
+        // Open paused so the farmer can frame the leaves before detection and logging begin.
+        isPaused = true
+        camera.setPaused(true)
         camera.start()
         if isTorchOn { camera.setTorch(true) }
         beginSession()

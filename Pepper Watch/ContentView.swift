@@ -13,12 +13,12 @@ enum AppTab: String, Hashable {
 }
 
 struct ContentView: View {
-    @State private var selection: AppTab = Self.initialTab
+    @Bindable private var navigator = AppNavigator.shared
 
     var body: some View {
-        TabView(selection: $selection) {
+        TabView(selection: $navigator.selectedTab) {
             Tab("Scan", systemImage: "camera.viewfinder", value: .scan) {
-                ScanTabView(isSelected: selection == .scan)
+                ScanTabView(isSelected: navigator.selectedTab == .scan)
             }
             Tab("Insights", systemImage: "chart.bar.xaxis", value: .insights) {
                 InsightsView()
@@ -35,15 +35,8 @@ struct ContentView: View {
         .tabBarMinimizeBehavior(.onScrollDown)
         // MapKit resets the window tint to system blue; pin the brand green explicitly.
         .tint(Color("AccentColor"))
-    }
-
-    /// Debug builds accept `-PWInitialTab insights` for demos and screenshots.
-    private static var initialTab: AppTab {
-        #if DEBUG
-        UserDefaults.standard.string(forKey: "PWInitialTab").flatMap(AppTab.init(rawValue:)) ?? .scan
-        #else
-        .scan
-        #endif
+        // Widget taps arrive as pepperwatch:// links.
+        .onOpenURL { navigator.open($0) }
     }
 }
 

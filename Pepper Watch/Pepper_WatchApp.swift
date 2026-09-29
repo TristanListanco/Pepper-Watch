@@ -10,59 +10,79 @@ import SwiftUI
 
 @main
 struct Pepper_WatchApp: App {
-    private let container: ModelContainer
-    private let logger: SystemLogger
-    @State private var engine: DetectionEngine
-    @State private var scanner: ScanModel
-    @State private var location: LocationProvider
-    @State private var geofence: GeofenceService
-    @State private var deviceMonitor = DeviceMonitor()
+    /// The iCloud choice decides how the data store is created, so it comes before anything else.
+    @AppStorage(SyncSettings.choiceMadeKey) private var hasChosenSync = false
 
     init() {
         AppSettings.registerDefaults()
-
-        let schema = AppSchema.schema
-        let container: ModelContainer
-        do {
-            container = try ModelContainer(for: schema)
-        } catch {
-            // Keep the app usable for a demo even if the on-disk store can't open.
-            container = try! ModelContainer(for: schema, configurations: ModelConfiguration(isStoredInMemoryOnly: true))
-        }
-        self.container = container
-
-        #if DEBUG
-        // `-PWSeedDemo YES` fills an empty store with demo data for screenshots.
-        if UserDefaults.standard.bool(forKey: "PWSeedDemo"),
-           (try? container.mainContext.fetchCount(FetchDescriptor<DetectionEvent>())) == 0 {
-            DemoDataGenerator.generate(in: container.mainContext)
-        }
-        #endif
-
-        let logger = SystemLogger(context: container.mainContext)
-        let engine = DetectionEngine(logger: logger)
-        let location = LocationProvider()
-        let geofence = GeofenceService(logger: logger)
-        self.logger = logger
-        _engine = State(initialValue: engine)
-        _location = State(initialValue: location)
-        _geofence = State(initialValue: geofence)
-        _scanner = State(initialValue: ScanModel(
-            context: container.mainContext, engine: engine, logger: logger, location: location, geofence: geofence
-        ))
+        PepperWatchTips.configure()
     }
 
     var body: some Scene {
         WindowGroup {
-            ContentView()
-                .environment(engine)
-                .environment(scanner)
-                .environment(location)
-                .environment(geofence)
-                .environment(deviceMonitor)
-                .environment(\.systemLogger, logger)
-                .task { await engine.configure(AppSettings.detectorConfiguration) }
+            if hasChosenSync {
+                AppRootView()
+            } else {
+                CloudSyncOnboardingView()
+            }
         }
-        .modelContainer(container)
+    }
+}
+
+/// Long-lived services, created once after the iCloud choice has been made.
+final class AppServices {
+    static let shared = AppServices()
+
+    let container: ModelContainer
+    let logger: SystemLogger
+    let engine: DetectionEngine
+    let location = LocationProvider()
+    let geofence: GeofenceService
+    let scanner: ScanModel
+    let deviceMonitor = DeviceMonitor()
+    let widgetSync: WidgetSync
+
+    private init() {
+        container = AppDataStore.container
+        let context = container.mainContext
+
+        #if DEBUG
+        // `-PWSeedDemo YES` fills an empty store with demo data for screenshots.
+        if UserDefaults.standard.bool(forKey: "PWSeedDemo"),
+           (try? context.fetchCount(FetchDescriptor<DetectionEvent>())) == 0 {
+            DemoDataGenerator.generate(in: context)
+        }
+        #endif
+
+        logger = SystemLogger(context: context)
+        engine = DetectionEngine(logger: logger)
+        geofence = GeofenceService(logger: logger)
+        scanner = ScanModel(context: context, engine: engine, logger: logger, location: location, geofence: geofence)
+        widgetSync = WidgetSync(context: context)
+    }
+}
+
+struct AppRootView: View {
+    private let services = AppServices.shared
+    @Environment(\.scenePhase) private var scenePhase
+
+    var body: some View {
+        ContentView()
+            .environment(services.engine)
+            .environment(services.scanner)
+            .environment(services.location)
+            .environment(services.geofence)
+            .environment(services.deviceMonitor)
+            .environment(\.systemLogger, services.logger)
+            .modelContainer(services.container)
+            .task { await services.engine.configure(AppSettings.detectorConfiguration) }
+            .task {
+                services.widgetSync.start()
+                services.logger.log(category: "sync", AppDataStore.isSyncingWithICloud ? "Data syncs with iCloud" : "Data is stored on this device only")
+            }
+            .onChange(of: scenePhase) { _, phase in
+                // Make sure widgets have the latest numbers when the user leaves the app.
+                if phase == .background { services.widgetSync.update() }
+            }
     }
 }
