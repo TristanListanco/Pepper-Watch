@@ -104,6 +104,12 @@ final class InsightNarrator {
         generation = Task { await generate(from: facts, scope: scope) }
     }
 
+    /// Pull to refresh: regenerates the summary and waits until it finishes.
+    func regenerate(facts: String, scope: String) async {
+        refresh(facts: facts, scope: scope, force: true)
+        await generation?.value
+    }
+
     private func generate(from facts: String, scope: String) async {
         phase = .generating
         content = HighlightContent()

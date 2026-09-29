@@ -128,6 +128,20 @@ private struct ScanReportView: View {
                 }
             }
 
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Details").font(.headline)
+                ForEach(details, id: \.label) { row in
+                    HStack(alignment: .firstTextBaseline) {
+                        Text(row.label)
+                            .foregroundStyle(.secondary)
+                        Spacer()
+                        Text(row.value)
+                            .multilineTextAlignment(.trailing)
+                    }
+                    .font(.callout)
+                }
+            }
+
             if !event.notes.isEmpty {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("Notes").font(.headline)
@@ -141,6 +155,30 @@ private struct ScanReportView: View {
         }
         .padding(36)
         .background(Color.white)
+    }
+
+    /// The same metadata shown on the scan's detail page.
+    private var details: [(label: String, value: String)] {
+        var rows: [(label: String, value: String)] = [
+            ("Field", event.fieldName.isEmpty ? "—" : event.fieldName),
+            ("Location check", {
+                switch event.geofenceVerified {
+                case true?: "Inside field boundary"
+                case false?: "Outside field boundary"
+                case nil: event.source == .photo ? "Photo import" : "Not checked"
+                }
+            }()),
+            ("Source", event.source.title),
+            ("Inference", "\(event.inferenceMs.fixed(1)) ms"),
+            ("Frame", "\(Int(event.imageWidth)) × \(Int(event.imageHeight)) px"),
+        ]
+        if let session = event.session {
+            rows.append(("Session average", "\(session.averageFPS.fixed(1)) FPS"))
+        }
+        if let coordinate = event.coordinate {
+            rows.append(("Location", "\(coordinate.latitude.fixed(5)), \(coordinate.longitude.fixed(5))"))
+        }
+        return rows
     }
 
     private func reportStat(_ count: Int, _ leafClass: LeafClass) -> some View {

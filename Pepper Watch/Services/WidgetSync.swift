@@ -5,6 +5,7 @@
 
 import Foundation
 import SwiftData
+import SwiftUI
 import WidgetKit
 
 /// Keeps the widget snapshot in the App Group container current. Updates are debounced
@@ -79,4 +80,8 @@ final class WidgetSync {
             fields: fieldStatuses
         )
     }
+}
+
+extension EnvironmentValues {
+    @Entry var widgetSync: WidgetSync?
 }

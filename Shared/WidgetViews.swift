@@ -6,7 +6,6 @@
 //
 
 import AppIntents
-import Charts
 import SwiftUI
 import WidgetKit
 
@@ -16,226 +15,99 @@ nonisolated enum WidgetPalette {
     static let aphid = Color(red: 0.922, green: 0.408, blue: 0.204)
 
     /// Background gradient for colorful Home Screen widgets, following the severity status colors
-    /// but deep enough for white text.
-    static func gradient(for severity: Severity?) -> [Color] {
+    /// but deep enough for white text. Dark mode keeps only a deep tint of the same hue.
+    static func gradient(for severity: Severity?, dark: Bool = false) -> [Color] {
+        switch (severity, dark) {
+        case (.clear?, false): [Color(red: 0.14, green: 0.65, blue: 0.35), Color(red: 0.05, green: 0.42, blue: 0.22)]
+        case (.low?, false): [Color(red: 0.80, green: 0.56, blue: 0.05), Color(red: 0.53, green: 0.34, blue: 0.0)]
+        case (.moderate?, false): [Color(red: 0.89, green: 0.41, blue: 0.18), Color(red: 0.60, green: 0.21, blue: 0.06)]
+        case (.severe?, false): [Color(red: 0.84, green: 0.21, blue: 0.24), Color(red: 0.52, green: 0.07, blue: 0.12)]
+        case (nil, false): [Color(red: 0.18, green: 0.54, blue: 0.23), Color(red: 0.08, green: 0.33, blue: 0.13)]
+        case (.clear?, true): [Color(red: 0.06, green: 0.24, blue: 0.14), Color(red: 0.02, green: 0.08, blue: 0.05)]
+        case (.low?, true): [Color(red: 0.27, green: 0.19, blue: 0.03), Color(red: 0.09, green: 0.06, blue: 0.01)]
+        case (.moderate?, true): [Color(red: 0.30, green: 0.13, blue: 0.05), Color(red: 0.10, green: 0.04, blue: 0.02)]
+        case (.severe?, true): [Color(red: 0.30, green: 0.07, blue: 0.09), Color(red: 0.10, green: 0.02, blue: 0.03)]
+        case (nil, true): [Color(red: 0.07, green: 0.20, blue: 0.10), Color(red: 0.02, green: 0.07, blue: 0.04)]
+        }
+    }
+
+    /// Bright severity color for the rate and status icon on the dark background.
+    static func accent(for severity: Severity?) -> Color {
         switch severity {
-        case .clear?: [Color(red: 0.14, green: 0.65, blue: 0.35), Color(red: 0.05, green: 0.42, blue: 0.22)]
-        case .low?: [Color(red: 0.80, green: 0.56, blue: 0.05), Color(red: 0.53, green: 0.34, blue: 0.0)]
-        case .moderate?: [Color(red: 0.89, green: 0.41, blue: 0.18), Color(red: 0.60, green: 0.21, blue: 0.06)]
-        case .severe?: [Color(red: 0.84, green: 0.21, blue: 0.24), Color(red: 0.52, green: 0.07, blue: 0.12)]
-        case nil: [Color(red: 0.18, green: 0.54, blue: 0.23), Color(red: 0.08, green: 0.33, blue: 0.13)]
+        case .clear?: Color(red: 0.30, green: 0.82, blue: 0.50)
+        case .low?: Color(red: 0.98, green: 0.74, blue: 0.20)
+        case .moderate?: Color(red: 1.0, green: 0.56, blue: 0.33)
+        case .severe?: Color(red: 1.0, green: 0.42, blue: 0.42)
+        case nil: Color(red: 0.40, green: 0.80, blue: 0.48)
         }
     }
 }
 
-/// Severity-tinted gradient behind colorful widgets.
+/// Severity-tinted gradient behind colorful widgets; a deep tint in dark mode.
 struct WidgetBackground: View {
     let severity: Severity?
+    @Environment(\.colorScheme) private var colorScheme
 
     var body: some View {
-        LinearGradient(colors: WidgetPalette.gradient(for: severity), startPoint: .topLeading, endPoint: .bottomTrailing)
+        LinearGradient(
+            colors: WidgetPalette.gradient(for: severity, dark: colorScheme == .dark),
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
     }
 }
 
-// MARK: - Field Status widget
+// MARK: - Field Status widget (Lock Screen)
 
 struct FieldStatusWidgetView: View {
     let status: WidgetSnapshot.FieldStatus
-    var fields: [WidgetSnapshot.FieldStatus] = []
     let family: WidgetFamily
     var now: Date = .now
-    /// White content for the severity gradient background.
-    var onColor = false
 
     var body: some View {
         let window = status.window(now: now)
-        Group {
-            switch family {
-            case .systemMedium:
-                HStack(spacing: 16) {
-                    StatusSummary(status: status, window: window, onColor: onColor)
-                        .frame(width: 124, alignment: .leading)
-                    WeeklyTrendChart(daily: window.daily, now: now, onColor: onColor)
-                }
-            case .systemLarge:
-                LargeFieldStatus(status: status, window: window, fields: fields, now: now, onColor: onColor)
-            case .accessoryCircular:
-                Gauge(value: window.infestationRate, in: 0...1) {
-                    Image(systemName: "ant.fill")
-                } currentValueLabel: {
-                    Text(window.totalLeaves == 0 ? "–" : "\(Int((window.infestationRate * 100).rounded()))")
-                }
-                .gaugeStyle(.accessoryCircular)
-                .accessibilityLabel("\(status.name): \(window.infestationRate.widgetPercent) infested")
-            case .accessoryRectangular:
-                VStack(alignment: .leading, spacing: 1) {
-                    Label(status.name, systemImage: window.severity?.symbol ?? "leaf")
-                        .font(.headline)
-                        .widgetAccentable()
-                    Text(window.totalLeaves == 0 ? "No scans this week" : "\(window.infestationRate.widgetPercent) infested")
-                    Text("\(window.severity?.title ?? "—") · \(window.scans) scans")
-                        .foregroundStyle(.secondary)
-                }
-                .font(.caption)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            case .accessoryInline:
-                Label(
-                    window.totalLeaves == 0 ? "\(status.name): no scans" : "\(status.name) \(window.infestationRate.widgetPercent) · \(window.severity?.title ?? "")",
-                    systemImage: "ant.fill"
-                )
-            default:
-                StatusSummary(status: status, window: window, onColor: onColor)
+        switch family {
+        case .accessoryCircular:
+            Gauge(value: window.infestationRate, in: 0...1) {
+                Image(systemName: "ant.fill")
+            } currentValueLabel: {
+                Text(window.totalLeaves == 0 ? "–" : "\(Int((window.infestationRate * 100).rounded()))")
             }
-        }
-        .foregroundStyle(onColor ? AnyShapeStyle(.white) : AnyShapeStyle(.primary))
-    }
-}
-
-/// Field name, 7-day infestation rate and severity.
-private struct StatusSummary: View {
-    let status: WidgetSnapshot.FieldStatus
-    let window: WidgetSnapshot.WindowSummary
-    let onColor: Bool
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 2) {
-            HStack(spacing: 4) {
-                Image(systemName: "leaf.fill")
-                    .foregroundStyle(onColor ? .white : WidgetPalette.brand)
-                Text(status.name)
-                    .lineLimit(1)
+            .gaugeStyle(.accessoryCircular)
+            .accessibilityLabel("\(status.name): \(window.infestationRate.widgetPercent) infested")
+        case .accessoryRectangular:
+            VStack(alignment: .leading, spacing: 1) {
+                Label(status.name, systemImage: window.severity?.symbol ?? "leaf")
+                    .font(.headline)
+                    .widgetAccentable()
+                Text(window.totalLeaves == 0 ? "No scans this week" : "\(window.infestationRate.widgetPercent) infested")
+                Text("\(window.severity?.title ?? "—") · \(window.scans) scans")
+                    .foregroundStyle(.secondary)
             }
-            .font(.caption.weight(.semibold))
-
-            Spacer(minLength: 4)
-
-            Text(window.totalLeaves == 0 ? "—" : window.infestationRate.widgetPercent)
-                .font(.system(size: 36, weight: .semibold, design: .rounded))
-                .minimumScaleFactor(0.6)
-                .contentTransition(.numericText())
-            Text("infested · 7 days")
-                .font(.caption2)
-                .opacity(0.8)
-
-            Spacer(minLength: 4)
-
-            SeverityTag(severity: window.severity, onColor: onColor)
+            .font(.caption)
+            .frame(maxWidth: .infinity, alignment: .leading)
+        default:
+            Label(
+                window.totalLeaves == 0 ? "\(status.name): no scans" : "\(status.name) \(window.infestationRate.widgetPercent) · \(window.severity?.title ?? "")",
+                systemImage: "ant.fill"
+            )
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     }
 }
 
 private struct SeverityTag: View {
     let severity: Severity?
-    var onColor = false
+    let iconColor: Color
 
     var body: some View {
         Label {
             Text(severity?.title ?? "No scans")
         } icon: {
             Image(systemName: severity?.symbol ?? "camera.viewfinder")
-                .foregroundStyle(onColor ? AnyShapeStyle(.white) : AnyShapeStyle(severity?.color ?? .secondary))
+                .foregroundStyle(iconColor)
         }
         .font(.caption.weight(.semibold))
         .lineLimit(1)
-    }
-}
-
-private struct WeeklyTrendChart: View {
-    let daily: [WidgetSnapshot.DailyCount]
-    let now: Date
-    var onColor = false
-
-    var body: some View {
-        let line = onColor ? Color.white : WidgetPalette.aphid
-        if daily.isEmpty {
-            Text("No scans this week")
-                .font(.caption)
-                .opacity(0.8)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-        } else {
-            Chart(daily) { day in
-                AreaMark(x: .value("Day", day.date, unit: .day), y: .value("Infested", day.rate))
-                    .foregroundStyle(LinearGradient(colors: [line.opacity(0.35), line.opacity(0)], startPoint: .top, endPoint: .bottom))
-                    .interpolationMethod(.monotone)
-                LineMark(x: .value("Day", day.date, unit: .day), y: .value("Infested", day.rate))
-                    .foregroundStyle(line)
-                    .lineStyle(StrokeStyle(lineWidth: 2))
-                    .interpolationMethod(.monotone)
-                PointMark(x: .value("Day", day.date, unit: .day), y: .value("Infested", day.rate))
-                    .foregroundStyle(line)
-                    .symbolSize(18)
-            }
-            .chartYScale(domain: 0...1)
-            .chartYAxis(.hidden)
-            .chartXScale(domain: weekDomain)
-            .chartXAxis {
-                AxisMarks(values: .stride(by: .day)) { _ in
-                    AxisValueLabel(format: .dateTime.weekday(.narrow))
-                        .foregroundStyle(onColor ? AnyShapeStyle(.white.opacity(0.8)) : AnyShapeStyle(.secondary))
-                }
-            }
-            .accessibilityLabel("Daily infestation over the past week")
-        }
-    }
-
-    private var weekDomain: ClosedRange<Date> {
-        let calendar = Calendar.current
-        let today = calendar.startOfDay(for: now)
-        let start = calendar.date(byAdding: .day, value: -6, to: today) ?? today
-        let end = calendar.date(byAdding: .day, value: 1, to: today) ?? today
-        return start...end
-    }
-}
-
-private struct LargeFieldStatus: View {
-    let status: WidgetSnapshot.FieldStatus
-    let window: WidgetSnapshot.WindowSummary
-    let fields: [WidgetSnapshot.FieldStatus]
-    let now: Date
-    let onColor: Bool
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 0) {
-                    Label(status.name, systemImage: "leaf.fill")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(onColor ? .white : WidgetPalette.brand)
-                    HStack(alignment: .firstTextBaseline, spacing: 4) {
-                        Text(window.totalLeaves == 0 ? "—" : window.infestationRate.widgetPercent)
-                            .font(.system(size: 34, weight: .semibold, design: .rounded))
-                        Text("infested · 7 days")
-                            .font(.caption)
-                            .opacity(0.8)
-                    }
-                }
-                Spacer()
-                SeverityTag(severity: window.severity, onColor: onColor)
-            }
-
-            WeeklyTrendChart(daily: window.daily, now: now, onColor: onColor)
-                .frame(height: 110)
-
-            Divider()
-                .overlay(onColor ? Color.white.opacity(0.4) : Color.clear)
-
-            ForEach(fields.prefix(4)) { field in
-                let fieldWindow = field.window(now: now)
-                HStack {
-                    Image(systemName: fieldWindow.severity?.symbol ?? "leaf")
-                        .foregroundStyle(onColor ? AnyShapeStyle(.white) : AnyShapeStyle(fieldWindow.severity?.color ?? .secondary))
-                    Text(field.name)
-                        .lineLimit(1)
-                    Spacer()
-                    Text(fieldWindow.totalLeaves == 0 ? "—" : fieldWindow.infestationRate.widgetPercent)
-                        .monospacedDigit()
-                        .opacity(0.85)
-                }
-                .font(.subheadline)
-            }
-            Spacer(minLength: 0)
-        }
     }
 }
 
@@ -247,6 +119,12 @@ struct FieldActionsWidgetView: View {
     let index: Int
     let family: WidgetFamily
     var now: Date = .now
+
+    @Environment(\.colorScheme) private var colorScheme
+
+    /// White text on the colorful gradient; bright severity accents on the dark background.
+    private var isDark: Bool { colorScheme == .dark }
+    private var controlFill: Color { .white.opacity(isDark ? 0.14 : 0.22) }
 
     var body: some View {
         let status = options.isEmpty ? nil : options[min(max(index, 0), options.count - 1)]
@@ -310,7 +188,8 @@ struct FieldActionsWidgetView: View {
                 .font(.system(size: 32, weight: .semibold, design: .rounded))
                 .minimumScaleFactor(0.6)
                 .contentTransition(.numericText())
-            SeverityTag(severity: window.severity, onColor: true)
+                .foregroundStyle(isDark ? WidgetPalette.accent(for: window.severity) : .white)
+            SeverityTag(severity: window.severity, iconColor: isDark ? WidgetPalette.accent(for: window.severity) : .white)
         }
     }
 
@@ -320,7 +199,7 @@ struct FieldActionsWidgetView: View {
                 Image(systemName: "chevron.left")
                     .font(.caption.weight(.bold))
                     .frame(width: 28, height: 28)
-                    .background(.white.opacity(0.22), in: .circle)
+                    .background(controlFill, in: .circle)
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Previous field")
@@ -333,7 +212,7 @@ struct FieldActionsWidgetView: View {
                 Image(systemName: "chevron.right")
                     .font(.caption.weight(.bold))
                     .frame(width: 28, height: 28)
-                    .background(.white.opacity(0.22), in: .circle)
+                    .background(controlFill, in: .circle)
             }
             .buttonStyle(.plain)
             .accessibilityLabel("Next field")
@@ -344,7 +223,7 @@ struct FieldActionsWidgetView: View {
         Label(title, systemImage: systemImage)
             .font(.subheadline.weight(.semibold))
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(.white.opacity(0.22), in: .rect(cornerRadius: 14))
+            .background(controlFill, in: .rect(cornerRadius: 14))
     }
 }
 

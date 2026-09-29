@@ -111,12 +111,14 @@ struct InsightsView: View {
     @Query(sort: \ScanSession.startedAt) private var sessions: [ScanSession]
     @Query(sort: \Field.name) private var fields: [Field]
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.widgetSync) private var widgetSync
     @AppStorage("insights.fieldID") private var selectedFieldID = ""
     @AppStorage("insights.showAllMetrics") private var showAllMetrics = false
     @AppStorage(PinnedMetrics.key) private var pinnedRaw = PinnedMetrics.defaultValue
     @State private var isEditingPinned = false
     @State private var narrator = InsightNarrator()
     @State private var path: [InsightMetric] = Self.initialPath
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     /// Debug builds accept `-PWInsightMetric infestation` to open a detail page for screenshots.
     private static var initialPath: [InsightMetric] {
@@ -150,7 +152,6 @@ struct InsightsView: View {
             }
             .background(Color(.systemGroupedBackground))
             .navigationTitle("Insights")
-            .navigationSubtitle(selectedField?.name ?? "All Fields")
             .navigationDestination(for: InsightMetric.self) { metric in
                 InsightDetailView(metric: metric, fieldID: selectedField?.id)
             }
@@ -259,6 +260,13 @@ struct InsightsView: View {
                 }
             }
             .padding()
+        }
+        // iPad: a subtle multicolor wash across the top, like the Health summary page.
+        .summaryGradientBackground(isVisible: horizontalSizeClass == .regular)
+        .refreshable {
+            // Pull down to regenerate the summary from the latest scans.
+            await narrator.regenerate(facts: facts, scope: selectedFieldID)
+            widgetSync?.update()
         }
         .task(id: facts) { narrator.refresh(facts: facts, scope: selectedFieldID) }
     }
@@ -416,6 +424,7 @@ private struct HighlightsCard: View {
     let narrator: InsightNarrator
     let fallback: HighlightContent
     let onRegenerate: () -> Void
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     private var isAI: Bool {
         switch narrator.phase {
@@ -474,7 +483,7 @@ private struct HighlightsCard: View {
                 }
                 .padding(12)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(.cardInset, in: .rect(cornerRadius: 14))
+                .background(.fill.quaternary, in: .rect(cornerRadius: 14))
             }
 
             Text(footnote)
@@ -483,7 +492,7 @@ private struct HighlightsCard: View {
         }
         .padding()
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.card, in: .rect(cornerRadius: 20))
+        .cardSurface(isGlass: horizontalSizeClass == .regular)
         .animation(.smooth, value: content)
     }
 

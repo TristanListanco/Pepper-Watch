@@ -14,7 +14,6 @@ import WidgetKit
 struct WidgetFieldEntity: AppEntity {
     static let typeDisplayRepresentation: TypeDisplayRepresentation = "Field"
     static let defaultQuery = WidgetFieldQuery()
-    static let allFields = WidgetFieldEntity(id: WidgetSnapshot.allFieldsID, name: "All Fields")
 
     let id: String
     let name: String
@@ -34,13 +33,12 @@ struct WidgetFieldQuery: EntityQuery {
     }
 
     func defaultResult() async -> WidgetFieldEntity? {
-        .allFields
+        options().first
     }
 
-    /// "All Fields" plus every field the app last wrote to the shared snapshot.
+    /// The fields the app last wrote to the shared snapshot. Each widget shows one field.
     private func options() -> [WidgetFieldEntity] {
-        let fields = WidgetSnapshot.load()?.fields ?? []
-        return [.allFields] + fields.map { WidgetFieldEntity(id: $0.id, name: $0.name) }
+        (WidgetSnapshot.load()?.fields ?? []).map { WidgetFieldEntity(id: $0.id, name: $0.name) }
     }
 }
 
@@ -67,7 +65,7 @@ struct FieldStatusEntry: TimelineEntry {
 struct FieldStatusProvider: AppIntentTimelineProvider {
     func placeholder(in context: Context) -> FieldStatusEntry {
         let sample = WidgetSnapshot.sample
-        return FieldStatusEntry(date: .now, status: sample.overall, fields: sample.fields)
+        return FieldStatusEntry(date: .now, status: sample.fields.first ?? sample.overall, fields: sample.fields)
     }
 
     func snapshot(for configuration: SelectFieldIntent, in context: Context) async -> FieldStatusEntry {
@@ -82,9 +80,10 @@ struct FieldStatusProvider: AppIntentTimelineProvider {
 
     private func entry(for configuration: SelectFieldIntent, preview: Bool) -> FieldStatusEntry {
         let snapshot = WidgetSnapshot.load() ?? (preview ? .sample : WidgetSnapshot.empty)
+        // Default to the first field; "All Fields" only shows before any field exists.
         return FieldStatusEntry(
             date: .now,
-            status: snapshot.status(forFieldID: configuration.field?.id),
+            status: snapshot.status(forFieldID: configuration.field?.id ?? snapshot.fields.first?.id),
             fields: snapshot.fields
         )
     }
@@ -102,22 +101,10 @@ private extension WidgetSnapshot {
 struct FieldStatusWidgetEntryView: View {
     let entry: FieldStatusEntry
     @Environment(\.widgetFamily) private var family
-    @Environment(\.widgetRenderingMode) private var renderingMode
-
-    /// Colorful gradients on the Home Screen; tinted and Lock Screen modes keep system styling.
-    private var isColorful: Bool {
-        renderingMode == .fullColor && [.systemSmall, .systemMedium, .systemLarge].contains(family)
-    }
 
     var body: some View {
-        FieldStatusWidgetView(status: entry.status, fields: entry.fields, family: family, now: entry.date, onColor: isColorful)
-            .containerBackground(for: .widget) {
-                if isColorful {
-                    WidgetBackground(severity: entry.status.window(now: entry.date).severity)
-                } else {
-                    Color.clear
-                }
-            }
+        FieldStatusWidgetView(status: entry.status, family: family, now: entry.date)
+            .containerBackground(.clear, for: .widget)
             .widgetURL(.pepperWatch("insights", fieldID: entry.status.id))
     }
 }
@@ -130,11 +117,8 @@ struct FieldStatusWidget: Widget {
             FieldStatusWidgetEntryView(entry: entry)
         }
         .configurationDisplayName("Field Status")
-        .description("Aphid infestation and severity over the past 7 days.")
-        .supportedFamilies([
-            .systemSmall, .systemMedium, .systemLarge,
-            .accessoryCircular, .accessoryRectangular, .accessoryInline,
-        ])
+        .description("A field's aphid infestation and severity over the past 7 days, on your Lock Screen.")
+        .supportedFamilies([.accessoryCircular, .accessoryRectangular, .accessoryInline])
     }
 }
 

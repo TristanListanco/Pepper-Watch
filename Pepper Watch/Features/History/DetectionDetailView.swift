@@ -34,9 +34,8 @@ struct DetectionDetailView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                hero
                 if horizontalSizeClass == .regular {
-                    // iPad: photo and insight beside the guidance, validation and metadata.
+                    // iPad: photo and insight beside validation and metadata.
                     HStack(alignment: .top, spacing: 20) {
                         VStack(alignment: .leading, spacing: 16) {
                             photo
@@ -45,22 +44,16 @@ struct DetectionDetailView: View {
                         }
                         .frame(maxWidth: .infinity)
                         VStack(alignment: .leading, spacing: 16) {
-                            if let severity = event.severity {
-                                RecommendationCard(severity: severity)
-                            }
-                            verification
                             details
+                            verification
                         }
                         .frame(maxWidth: .infinity)
                     }
                 } else {
                     photo
                     insightCard
-                    if let severity = event.severity {
-                        RecommendationCard(severity: severity)
-                    }
-                    verification
                     details
+                    verification
                     notes
                 }
             }
@@ -108,70 +101,6 @@ struct DetectionDetailView: View {
         .onDisappear { try? modelContext.save() }
     }
 
-    // MARK: - Summary
-
-    /// The result first: severity, infestation rate and class counts, tinted by severity.
-    private var hero: some View {
-        let summary = event.summary
-        let tint = summary.severity?.color ?? Color.secondary
-        return VStack(alignment: .leading, spacing: 14) {
-            HStack {
-                SeverityBadge(severity: summary.severity)
-                Spacer()
-                if let verified = event.geofenceVerified {
-                    Label(verified ? "In field" : "Outside field", systemImage: verified ? "checkmark.seal.fill" : "location.slash")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                }
-            }
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(summary.infestationRate.percentText)
-                    .font(.system(size: 56, weight: .bold, design: .rounded))
-                    .contentTransition(.numericText())
-                Text("of leaves infested")
-                    .font(.title3.weight(.medium))
-                    .foregroundStyle(.secondary)
-            }
-            HStack(spacing: 12) {
-                heroStat(.aphidInfested, count: summary.aphidCount)
-                heroStat(.healthy, count: summary.healthyCount)
-            }
-            if !event.fieldName.isEmpty {
-                Label(event.fieldName, systemImage: "mappin.and.ellipse")
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .padding(20)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            LinearGradient(colors: [tint.opacity(0.3), tint.opacity(0.08)], startPoint: .topLeading, endPoint: .bottomTrailing),
-            in: .rect(cornerRadius: 24)
-        )
-        .overlay(RoundedRectangle(cornerRadius: 24).strokeBorder(tint.opacity(0.35)))
-        .accessibilityElement(children: .combine)
-    }
-
-    private func heroStat(_ leafClass: LeafClass, count: Int) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: leafClass.symbol)
-                .font(.title2)
-                .foregroundStyle(leafClass.color)
-                .frame(width: 32)
-            VStack(alignment: .leading, spacing: 0) {
-                Text(count, format: .number)
-                    .font(.title.weight(.bold))
-                    .contentTransition(.numericText())
-                Text(leafClass.displayName)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .padding(12)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.card.opacity(0.85), in: .rect(cornerRadius: 16))
-    }
-
     // MARK: - Insight
 
     private var insightCard: some View {
@@ -197,19 +126,6 @@ struct DetectionDetailView: View {
                         .foregroundStyle(.secondary)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                if let nextStep = insight.nextStep {
-                    Label {
-                        Text(nextStep).fixedSize(horizontal: false, vertical: true)
-                    } icon: {
-                        Image(systemName: "lightbulb.fill").foregroundStyle(.yellow)
-                    }
-                    .padding(12)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(.cardInset, in: .rect(cornerRadius: 14))
-                }
-                Text(insight.source.footnote)
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
             } else {
                 Text("Analyzing this photo…")
                     .foregroundStyle(.secondary)
@@ -311,6 +227,10 @@ struct DetectionDetailView: View {
 
     private var details: some View {
         VStack(alignment: .leading, spacing: 0) {
+            DetailRow(title: "Severity", value: event.severity?.title ?? "No leaves", symbol: event.severity?.symbol ?? "leaf")
+            Divider()
+            DetailRow(title: "Infested", value: "\(event.summary.infestationRate.percentText) · \(event.aphidCount) of \(event.aphidCount + event.healthyCount) leaves", symbol: LeafClass.aphidInfested.symbol)
+            Divider()
             DetailRow(title: "Field", value: event.fieldName.isEmpty ? "—" : event.fieldName, symbol: "mappin.and.ellipse")
             Divider()
             DetailRow(title: "Location check", value: verificationText, symbol: verificationSymbol)
