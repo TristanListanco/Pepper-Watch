@@ -13,6 +13,7 @@ struct InfestationDonut: View {
     let total: Int
     var showsValue = true
     @State private var revealed: Bool
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     init(aphid: Int, total: Int, showsValue: Bool = true, animatesIn: Bool = true) {
         self.aphid = aphid
@@ -58,7 +59,12 @@ struct InfestationDonut: View {
         .aspectRatio(1, contentMode: .fit)
         .onAppear {
             guard !revealed else { return }
-            withAnimation(.smooth(duration: 0.9).delay(0.1)) { revealed = true }
+            // Reduce Motion shows the finished donut instead of sweeping it in.
+            if reduceMotion {
+                revealed = true
+            } else {
+                withAnimation(.smooth(duration: 0.9).delay(0.1)) { revealed = true }
+            }
         }
         .accessibilityElement()
         .accessibilityLabel(total == 0 ? "No leaves scanned" : "\(rate.percentText) of leaves infested")
