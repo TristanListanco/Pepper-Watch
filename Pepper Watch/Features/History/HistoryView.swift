@@ -37,7 +37,13 @@ enum HistoryFilter: String, CaseIterable, Identifiable {
 }
 
 struct HistoryView: View {
-    @Query(sort: \DetectionEvent.timestamp, order: .reverse) private var events: [DetectionEvent]
+    /// Sectioned by day (iOS 27), so the grid gets its day groups straight from the query.
+    /// Sections come back oldest first, so the view reverses them for a newest-first gallery.
+    @Query(
+        sort: [SortDescriptor(\DetectionEvent.dayKey), SortDescriptor(\DetectionEvent.timestamp)],
+        sectionBy: \DetectionEvent.dayKey
+    )
+    private var days: SectionedResults<DetectionEvent, String>
     @Query(sort: \Field.name) private var fields: [Field]
     @Environment(\.modelContext) private var modelContext
     @Environment(\.widgetSync) private var widgetSync
@@ -51,6 +57,7 @@ struct HistoryView: View {
     @State private var path: [DetectionEvent] = []
     @State private var pinchScale: CGFloat = 1
     @State private var pinchAnchor: UnitPoint = .center
+    @Namespace private var zoomSpace
 
     /// Minimum thumbnail widths; the grid fits as many columns as the width allows (3 on iPhone at the default).
     private static let thumbnailSizes: [CGFloat] = [64, 84, 110, 150, 210, 300]
@@ -59,18 +66,29 @@ struct HistoryView: View {
         Self.thumbnailSizes[min(max(thumbnailLevel, 0), Self.thumbnailSizes.count - 1)]
     }
 
-    /// Events matching the filter menu.
-    private var visibleEvents: [DetectionEvent] {
-        events.filter { event in
-            guard filter.includes(event) else { return false }
-            if !fieldFilterID.isEmpty, event.field?.id.uuidString != fieldFilterID { return false }
-            return true
+    private func matchesFilter(_ event: DetectionEvent) -> Bool {
+        guard filter.includes(event) else { return false }
+        if !fieldFilterID.isEmpty, event.field?.id.uuidString != fieldFilterID { return false }
+        return true
+    }
+
+    /// Every scan, newest first.
+    private var events: [DetectionEvent] {
+        days.reversed().flatMap { $0.reversed() }
+    }
+
+    /// The query's day sections, newest first, keeping only scans that match the filter menu.
+    private var groupedByDay: [(day: Date, events: [DetectionEvent])] {
+        days.reversed().compactMap { section in
+            let matching = section.reversed().filter(matchesFilter)
+            guard let first = matching.first else { return nil }
+            return (day: Calendar.current.startOfDay(for: first.timestamp), events: matching)
         }
     }
 
-    private var groupedByDay: [(day: Date, events: [DetectionEvent])] {
-        let groups = Dictionary(grouping: visibleEvents) { Calendar.current.startOfDay(for: $0.timestamp) }
-        return groups.map { (day: $0.key, events: $0.value) }.sorted { $0.day > $1.day }
+    /// Events matching the filter menu.
+    private var visibleEvents: [DetectionEvent] {
+        groupedByDay.flatMap(\.events)
     }
 
     var body: some View {
@@ -89,6 +107,7 @@ struct HistoryView: View {
             .navigationBarTitleDisplayMode(isSelecting ? .inline : .automatic)
             .navigationDestination(for: DetectionEvent.self) { event in
                 DetectionDetailView(event: event)
+                    .navigationTransition(.zoom(sourceID: event.id, in: zoomSpace))
             }
             .toolbar { toolbarContent }
             #if DEBUG
@@ -165,6 +184,7 @@ struct HistoryView: View {
                 HistoryTile(event: event, compact: thumbnailSize < 90, isSelected: nil)
             }
             .buttonStyle(.plain)
+            .matchedTransitionSource(id: event.id, in: zoomSpace)
             .contextMenu {
                 Button("Select", systemImage: "checkmark.circle") {
                     withAnimation { isSelecting = true }
@@ -243,6 +263,7 @@ struct HistoryView: View {
                 }
                 .disabled(events.isEmpty)
             }
+            .visibilityPriority(.low)
             ToolbarItem(placement: .primaryAction) {
                 Menu {
                     Picker("Show", selection: $filter.animation()) {
@@ -278,6 +299,7 @@ struct HistoryView: View {
                 }
                 .popoverTip(events.isEmpty ? nil : PinchGridTip())
             }
+            .visibilityPriority(.high)
         }
     }
 
