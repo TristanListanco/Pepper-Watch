@@ -100,6 +100,7 @@ private struct FieldListView: View {
     @State private var locationAccess = LocationAccess()
     /// The order set by dragging fields in the list (watchOS 27), shared with the widgets.
     @AppStorage(WatchStore.fieldOrderKey, store: SharedContainer.defaults) private var orderRaw = ""
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     var body: some View {
         let fields = WatchStore.ordered(payload.snapshot.fields, order: orderRaw)
@@ -157,6 +158,8 @@ private struct FieldListView: View {
             // Your Fields shows the first three in this order.
             WidgetCenter.shared.reloadTimelines(ofKind: WatchWidgetKind.yourFields)
         }
+        // With Reduce Motion, reordered fields settle without animating.
+        .transaction { if reduceMotion { $0.animation = nil } }
         // A tap on the wrist when a field lands in its new place.
         .sensoryFeedback(.impact(weight: .light), trigger: orderRaw)
         .task(id: fields.count) { ReorderFieldsTip.fieldCount = fields.count }
@@ -191,11 +194,18 @@ private struct FieldCard: View {
 /// The field's name, its infested share below, and how long since it was scanned in the corner.
 private struct FieldRow: View {
     let status: WidgetSnapshot.FieldStatus
+    /// The card's color is the only other status cue, so this adds the severity symbol.
+    @Environment(\.accessibilityDifferentiateWithoutColor) private var differentiateWithoutColor
 
     var body: some View {
         let window = status.window()
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .firstTextBaseline) {
+                if differentiateWithoutColor, let severity = window.severity {
+                    Image(systemName: severity.symbol)
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.primary)
+                }
                 Text(status.name)
                     .font(.headline)
                     .foregroundStyle(.primary)

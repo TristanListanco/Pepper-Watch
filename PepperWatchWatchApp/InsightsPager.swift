@@ -28,6 +28,8 @@ struct InsightsPager: View {
     @Namespace private var chartTransition
     /// Always On with the wrist down: large bright backgrounds dim to save power (watchOS 8).
     @Environment(\.isLuminanceReduced) private var isLuminanceReduced
+    /// Reduce Motion: charts, the donut and numbers appear in place instead of animating.
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     init(status: WidgetSnapshot.FieldStatus, trends: [String: WatchPayload.Trend]?) {
         self.status = status
@@ -106,6 +108,8 @@ struct InsightsPager: View {
             }
             .tabViewStyle(.verticalPage(transitionStyle: .blur))
             .environment(\.chartTransition, chartTransition)
+            // With Reduce Motion, every change on these pages lands without animating.
+            .transaction { if reduceMotion { $0.animation = nil } }
             // A tick on the wrist for each range step, whether tapped or double tapped.
             .sensoryFeedback(.selection, trigger: range)
             .navigationTitle(status.name)
@@ -433,6 +437,7 @@ private struct ContextLine: View {
 /// Severity as an icon and label on a Liquid Glass capsule tinted with the status color.
 private struct SeverityChip: View {
     let severity: Severity?
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     /// The icon draws itself in as the donut sweeps (SF Symbols 7, watchOS 26).
     @State private var isDrawn = false
 
@@ -443,9 +448,10 @@ private struct SeverityChip: View {
         } icon: {
             Image(systemName: severity?.symbol ?? "camera.viewfinder")
                 .foregroundStyle(severity?.color ?? .secondary)
-                .symbolEffect(.drawOff, isActive: !isDrawn)
-                // A severe field's icon wiggles every few seconds to draw the eye (SF Symbols 6).
-                .symbolEffect(.wiggle, options: .repeat(.periodic(delay: 4)), isActive: isDrawn && severity == .severe)
+                .symbolEffect(.drawOff, isActive: !isDrawn && !reduceMotion)
+                // A severe field's icon wiggles every few seconds to draw the eye (SF Symbols 6),
+                // unless Reduce Motion is on.
+                .symbolEffect(.wiggle, options: .repeat(.periodic(delay: 4)), isActive: isDrawn && severity == .severe && !reduceMotion)
                 // Swaps smoothly when new numbers change the severity (watchOS 27).
                 .contentTransition(.symbolEffect(.replace))
         }
