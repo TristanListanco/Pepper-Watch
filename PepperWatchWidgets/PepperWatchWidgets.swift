@@ -227,6 +227,23 @@ struct FieldActionsWidget: Widget {
     }
 }
 
+// MARK: - Control (iOS 18)
+
+/// Opens the scanner from Control Center, the Lock Screen or the Action button.
+struct ScanLeavesControl: ControlWidget {
+    static let kind = "com.tristanlistanco.Pepper-Watch.ScanLeaves"
+
+    var body: some ControlWidgetConfiguration {
+        StaticControlConfiguration(kind: Self.kind) {
+            ControlWidgetButton(action: OpenScannerIntent()) {
+                Label("Scan Leaves", systemImage: "camera.viewfinder")
+            }
+        }
+        .displayName("Scan Leaves")
+        .description("Open the Pepper Watch scanner.")
+    }
+}
+
 private extension WidgetFamily {
     var isHomeScreen: Bool {
         switch self {
@@ -241,5 +258,6 @@ struct PepperWatchWidgetsBundle: WidgetBundle {
     var body: some Widget {
         FieldStatusWidget()
         FieldActionsWidget()
+        ScanLeavesControl()
     }
 }

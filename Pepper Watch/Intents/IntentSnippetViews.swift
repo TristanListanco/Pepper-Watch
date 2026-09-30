@@ -16,7 +16,7 @@ struct FieldStatusSnippet: View {
             HStack {
                 Label(report.scopeName.capitalized, systemImage: "leaf.fill")
                     .font(.headline)
-                    .foregroundStyle(Color("AccentColor"))
+                    .foregroundStyle(Color(.accent))
                 Spacer()
                 SeverityBadge(severity: stats.overallSeverity, compact: true)
             }

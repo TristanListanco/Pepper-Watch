@@ -112,6 +112,9 @@ nonisolated struct FieldRegion: Hashable, Sendable {
 
 @Model
 final class ScanSession {
+    // Sessions are listed newest first.
+    #Index<ScanSession>([\.startedAt])
+
     var id: UUID = UUID()
     var startedAt: Date = Date.now
     var endedAt: Date?
@@ -145,6 +148,9 @@ final class ScanSession {
 
 @Model
 final class DetectionEvent {
+    // History sections by day and sorts by time; Insights and widgets fetch by date range.
+    #Index<DetectionEvent>([\.timestamp], [\.dayKey, \.timestamp])
+
     var id: UUID = UUID()
     var timestamp: Date = Date.now
     var sourceRaw: String = EventSource.snapshot.rawValue
@@ -287,6 +293,8 @@ nonisolated enum LogLevel: String, CaseIterable, Codable, Sendable {
 
 @Model
 final class SystemLog {
+    #Index<SystemLog>([\.timestamp])
+
     var timestamp: Date = Date.now
     var levelRaw: String = LogLevel.info.rawValue
     var category: String = ""

@@ -35,6 +35,8 @@ struct ScanTabView: View {
     @Query(sort: \Field.createdAt) private var fields: [Field]
     @State private var path: [Field] = []
     @State private var editorRoute: FieldEditorRoute?
+    /// The field editor zooms out of the + button, or out of the card being edited (iOS 26).
+    @Namespace private var editorTransition
 
     private var isActive: Bool { isSelected && scenePhase == .active }
 
@@ -48,7 +50,8 @@ struct ScanTabView: View {
                         fields: fields,
                         onScan: { path.append($0) },
                         onNewField: { editorRoute = .new },
-                        onEdit: { editorRoute = .edit($0) }
+                        onEdit: { editorRoute = .edit($0) },
+                        editorTransition: editorTransition
                     )
                 }
             }
@@ -61,6 +64,7 @@ struct ScanTabView: View {
                 // A newly created field goes straight to scanning.
                 if route.field == nil { path = [saved] }
             }
+            .navigationTransition(.zoom(sourceID: route.id, in: editorTransition))
         }
         .task(id: isActive) {
             if isActive { location.start() } else { location.stop() }
@@ -70,6 +74,11 @@ struct ScanTabView: View {
             // Let Siri, Shortcuts and Spotlight know about field names.
             PepperWatchShortcuts.updateAppShortcutParameters()
             try? await CSSearchableIndex.default().indexAppEntities(fields.map { FieldEntity($0) })
+        }
+        .onChange(of: AppNavigator.shared.newFieldRequests) {
+            // File › New Field (⌘N) on iPad.
+            path = []
+            editorRoute = .new
         }
         .onChange(of: AppNavigator.shared.pendingScanFieldID, initial: true) { _, fieldID in
             // "Start scanning" from Siri or a widget opens that field's scanner.
@@ -185,6 +194,9 @@ struct GeofenceBadge: View {
         } icon: {
             Image(systemName: symbol)
                 .foregroundStyle(tint)
+                .contentTransition(.symbolEffect(.replace))
+                // Breathes while the location is still being found (SF Symbols 6).
+                .symbolEffect(.breathe, isActive: status?.presence == .unknown || status == nil)
         }
             .font(.caption.weight(.semibold))
             .foregroundStyle(.primary)

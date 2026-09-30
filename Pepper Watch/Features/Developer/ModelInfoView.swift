@@ -17,6 +17,7 @@ struct ModelInfoView: View {
 
     @State private var iterations = 50
     @State private var isBenchmarking = false
+    @State private var benchmarkRuns = 0
     @State private var benchmark: DetectionEngine.BenchmarkResult?
     @State private var benchmarkError: String?
     @State private var computePlan: ComputePlanReport?
@@ -64,11 +65,12 @@ struct ModelInfoView: View {
             LabeledContent("Exporter", value: "\(info.author) \(info.version)")
             LabeledContent("License", value: info.license)
             LabeledContent("Exported", value: info.exportedAt)
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Export arguments")
+            // The full Ultralytics export command is long; it opens on demand.
+            DisclosureGroup("Export arguments") {
                 Text(info.exportArguments)
                     .font(.caption.monospaced())
                     .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
             }
         } header: {
             Text("Model")
@@ -182,15 +184,17 @@ struct ModelInfoView: View {
             Button {
                 Task { await runBenchmark() }
             } label: {
-                HStack {
-                    Label(isBenchmarking ? "Running…" : "Run Benchmark", systemImage: "stopwatch")
-                    if isBenchmarking {
-                        Spacer()
-                        ProgressView()
-                    }
-                }
+                Label(isBenchmarking ? "Running…" : "Run Benchmark", systemImage: "stopwatch")
             }
             .disabled(isBenchmarking || engine.detector == nil)
+
+            if isBenchmarking {
+                ProgressView(value: Double(benchmarkRuns), total: Double(iterations)) {
+                    Text("\(benchmarkRuns) of \(iterations) runs")
+                        .font(.caption.monospacedDigit())
+                        .foregroundStyle(.secondary)
+                }
+            }
 
             if let benchmarkError {
                 Label(benchmarkError, systemImage: "exclamationmark.triangle")
@@ -228,10 +232,11 @@ struct ModelInfoView: View {
 
     private func runBenchmark() async {
         isBenchmarking = true
+        benchmarkRuns = 0
         benchmarkError = nil
         defer { isBenchmarking = false }
         do {
-            benchmark = try await engine.runBenchmark(iterations: iterations)
+            benchmark = try await engine.runBenchmark(iterations: iterations) { benchmarkRuns = $0 }
         } catch {
             benchmarkError = error.localizedDescription
         }

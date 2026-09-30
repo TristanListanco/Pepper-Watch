@@ -47,8 +47,9 @@ struct PerformanceMonitorView: View {
             }
 
             Section("Memory") {
-                Chart(monitor.memoryHistory) { sample in
-                    LineMark(x: .value("Time", sample.date), y: .value("MB", sample.megabytes))
+                // Vectorized plots (iOS 18) draw a whole series at once instead of a mark per sample.
+                Chart {
+                    LinePlot(monitor.memoryHistory, x: .value("Time", \.date), y: .value("MB", \.megabytes))
                         .foregroundStyle(.tint)
                         .lineStyle(StrokeStyle(lineWidth: 2))
                         .interpolationMethod(.monotone)
@@ -67,8 +68,15 @@ struct PerformanceMonitorView: View {
                     Text("No scanning sessions recorded yet.")
                         .foregroundStyle(.secondary)
                 }
-                ForEach(sessions.prefix(30)) { session in
+                ForEach(sessions.prefix(5)) { session in
                     SessionRow(session: session, target: fpsTarget)
+                }
+                if sessions.count > 5 {
+                    NavigationLink {
+                        SessionsTableView()
+                    } label: {
+                        LabeledContent("All Sessions", value: sessions.count.formatted())
+                    }
                 }
             } header: {
                 Text("Session History")
@@ -210,12 +218,10 @@ struct PerformanceMonitorView: View {
                     .annotation(position: .top, alignment: .trailing, spacing: 2) {
                         Text("Target \(fpsTarget.fixed(0))").font(.caption2).foregroundStyle(.secondary)
                     }
-                ForEach(scanner.performanceSamples) { sample in
-                    LineMark(x: .value("Time", sample.date), y: .value("FPS", sample.fps))
-                        .foregroundStyle(.tint)
-                        .lineStyle(StrokeStyle(lineWidth: 2))
-                        .interpolationMethod(.monotone)
-                }
+                LinePlot(scanner.performanceSamples, x: .value("Time", \.date), y: .value("FPS", \.fps))
+                    .foregroundStyle(.tint)
+                    .lineStyle(StrokeStyle(lineWidth: 2))
+                    .interpolationMethod(.monotone)
             }
             .chartYScale(domain: 0...max(fpsTarget * 2, (scanner.performanceSamples.map(\.fps).max() ?? 0) * 1.1))
             .chartXAxis(.hidden)
@@ -227,11 +233,11 @@ struct PerformanceMonitorView: View {
     private var liveLatencyChart: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text("Inference latency (ms)").font(.subheadline.weight(.semibold))
-            Chart(scanner.performanceSamples) { sample in
-                AreaMark(x: .value("Time", sample.date), y: .value("ms", sample.latencyMs))
+            Chart {
+                AreaPlot(scanner.performanceSamples, x: .value("Time", \.date), y: .value("ms", \.latencyMs))
                     .foregroundStyle(.tint.opacity(0.2))
                     .interpolationMethod(.monotone)
-                LineMark(x: .value("Time", sample.date), y: .value("ms", sample.latencyMs))
+                LinePlot(scanner.performanceSamples, x: .value("Time", \.date), y: .value("ms", \.latencyMs))
                     .foregroundStyle(.tint)
                     .lineStyle(StrokeStyle(lineWidth: 2))
                     .interpolationMethod(.monotone)
@@ -269,6 +275,56 @@ struct ThroughputReading {
             return ThroughputReading(fps: scanner.fps, inferenceMs: scanner.inferenceMs, isLive: true)
         }
         return lastSession.map { ThroughputReading(fps: $0.averageFPS, inferenceMs: $0.averageInferenceMs, isLive: false) }
+    }
+}
+
+/// Every scanning session in a sortable table (iOS 16 Table): tap a column header to sort by
+/// field, frames, throughput or latency. On iPhone it collapses to one column of rows.
+struct SessionsTableView: View {
+    @Query(sort: \ScanSession.startedAt, order: .reverse) private var sessions: [ScanSession]
+    @AppStorage(SettingsKey.fpsTarget) private var fpsTarget = 17.0
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @State private var sortOrder = [KeyPathComparator(\ScanSession.startedAt, order: .reverse)]
+
+    var body: some View {
+        Table(sessions.sorted(using: sortOrder), sortOrder: $sortOrder) {
+            TableColumn("Session", value: \.startedAt) { session in
+                if horizontalSizeClass == .compact {
+                    SessionRow(session: session, target: fpsTarget)
+                } else {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(session.fieldName.isEmpty ? "Session" : session.fieldName)
+                            .fontWeight(.semibold)
+                        Text(session.startedAt, format: .dateTime.month().day().hour().minute())
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .width(min: 160, ideal: 220)
+            TableColumn("Frames", value: \.framesProcessed) { session in
+                Text(session.framesProcessed, format: .number)
+                    .monospacedDigit()
+            }
+            TableColumn("Throughput", value: \.averageFPS) { session in
+                let passes = session.averageFPS >= fpsTarget
+                Label("\(session.averageFPS.fixed(1)) FPS", systemImage: passes ? Severity.clear.symbol : Severity.severe.symbol)
+                    .foregroundStyle(passes ? Severity.clear.color : Severity.severe.color)
+                    .monospacedDigit()
+            }
+            TableColumn("Latency", value: \.averageInferenceMs) { session in
+                Text("\(session.averageInferenceMs.fixed(1)) ms")
+                    .monospacedDigit()
+            }
+            TableColumn("Compute", value: \.computeUnits)
+        }
+        .navigationTitle("Sessions")
+        .navigationBarTitleDisplayMode(.inline)
+        .overlay {
+            if sessions.isEmpty {
+                ContentUnavailableView("No Sessions", systemImage: "timer", description: Text("Scanning sessions appear here."))
+            }
+        }
     }
 }
 

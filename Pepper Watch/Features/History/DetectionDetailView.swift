@@ -20,6 +20,8 @@ struct DetectionDetailView: View {
     @State private var isGeneratingInsight = false
     @State private var isConfirmingDelete = false
     @State private var isViewingFullScreen = false
+    /// The full-screen viewer zooms out of the photo.
+    @Namespace private var photoTransition
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     private var sortedBoxes: [BoundingBox] {
@@ -59,9 +61,13 @@ struct DetectionDetailView: View {
             }
             .padding()
         }
+        // Scrolling away from Notes puts the keyboard away.
+        .scrollDismissesKeyboard(.interactively)
         .background(Color(.systemGroupedBackground))
         .navigationTitle(event.timestamp.formatted(date: .abbreviated, time: .shortened))
         .navigationBarTitleDisplayMode(.inline)
+        // iPad: title on the leading edge, leaving room for the scan's actions.
+        .toolbarRole(.editor)
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 if let reportURL {
@@ -86,8 +92,12 @@ struct DetectionDetailView: View {
                 dismiss()
             }
         }
+        // A screenshot of this page offers the scan's PDF report as "Full Page".
+        .onChange(of: reportURL, initial: true) { _, url in ScreenshotReportProvider.shared.show(url) }
+        .onDisappear { ScreenshotReportProvider.shared.clear(reportURL) }
         .fullScreenCover(isPresented: $isViewingFullScreen) {
             ZoomableImageViewer(imageData: event.imageData, detections: event.detections)
+                .navigationTransition(.zoom(sourceID: event.id, in: photoTransition))
         }
         .task(id: event.id) {
             if let data = event.imageData { decodedImage = UIImage(data: data) }
@@ -166,6 +176,7 @@ struct DetectionDetailView: View {
                         .padding(10)
                 }
             }
+            .matchedTransitionSource(id: event.id, in: photoTransition)
             .onTapGesture { if event.imageData != nil { isViewingFullScreen = true } }
             .accessibilityAddTraits(.isButton)
             .accessibilityHint("Opens the photo full screen with pinch to zoom")
@@ -253,11 +264,13 @@ struct DetectionDetailView: View {
                     value: "\(coordinate.latitude.fixed(5)), \(coordinate.longitude.fixed(5))",
                     symbol: "location"
                 )
+                .textSelection(.enabled)
+                // A still map of where the scan was taken; it doesn't pan or zoom.
                 Map(initialPosition: .region(MKCoordinateRegion(
                     center: CLLocationCoordinate2D(latitude: coordinate.latitude, longitude: coordinate.longitude),
                     latitudinalMeters: 250,
                     longitudinalMeters: 250
-                ))) {
+                )), interactionModes: []) {
                     Marker(event.fieldName, systemImage: "leaf.fill", coordinate: CLLocationCoordinate2D(latitude: coordinate.latitude, longitude: coordinate.longitude))
                         .tint(event.severity?.color ?? .green)
                 }

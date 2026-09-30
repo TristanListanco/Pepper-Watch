@@ -642,6 +642,7 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "PepperWatch-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "Pepper Watch";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Pepper Watch uses the camera to scan bell pepper leaves for aphid damage. Frames are analyzed on this device and never uploaded.";
@@ -697,6 +698,7 @@
 				ENABLE_PREVIEWS = YES;
 				ENABLE_USER_SELECTED_FILES = readonly;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = "PepperWatch-Info.plist";
 				INFOPLIST_KEY_CFBundleDisplayName = "Pepper Watch";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.productivity";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Pepper Watch uses the camera to scan bell pepper leaves for aphid damage. Frames are analyzed on this device and never uploaded.";
