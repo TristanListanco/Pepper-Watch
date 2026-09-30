@@ -24,6 +24,7 @@ final class PhoneConnection: NSObject {
     func start() {
         // Scouting reminders are time based, so refresh them every time the app opens.
         donateRelevance()
+        DailyRefresh.schedule()
         guard WCSession.isSupported(), WCSession.default.delegate == nil else { return }
         WCSession.default.delegate = self
         WCSession.default.activate()
@@ -64,10 +65,26 @@ final class PhoneConnection: NSObject {
         payload = decoded
         WatchStore.savePayload(data)
         WidgetCenter.shared.reloadAllTimelines()
+        // The Field Status control shows the new rate too.
+        ControlCenter.shared.reloadControls(ofKind: WatchWidgetKind.fieldControl)
+        // Siri learns the field names for "Check <field> in Pepper Watch".
+        PepperWatchWatchShortcuts.updateAppShortcutParameters()
         // Field locations may have changed, so let the Smart Stack re-check where each widget is relevant.
         WidgetCenter.shared.invalidateRelevance(ofKind: WatchWidgetKind.fieldStatus)
         WidgetCenter.shared.invalidateRelevance(ofKind: WatchWidgetKind.atField)
         donateRelevance()
+    }
+
+    /// Runs each morning even without new numbers from the iPhone: the 7-day window rolls over,
+    /// and the Smart Stack's date-based relevance (the scouting morning, a moderate or severe
+    /// field) is worked out for the new day.
+    func refreshForNewDay() {
+        WidgetCenter.shared.reloadAllTimelines()
+        ControlCenter.shared.reloadControls(ofKind: WatchWidgetKind.fieldControl)
+        WidgetCenter.shared.invalidateRelevance(ofKind: WatchWidgetKind.fieldStatus)
+        WidgetCenter.shared.invalidateRelevance(ofKind: WatchWidgetKind.atField)
+        donateRelevance()
+        DailyRefresh.schedule()
     }
 
     /// Tells the Smart Stack, through RelevantContext, when each field's widget matters: at the
