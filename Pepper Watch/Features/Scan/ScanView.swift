@@ -226,10 +226,36 @@ struct ScanView: View {
                 if let status = scanner.geofenceStatus, status.presence == .outside {
                     outsideFieldBanner(status)
                 }
+                if scanner.isLensSmudged, !scanner.isPaused {
+                    lensBanner
+                        .transition(.move(edge: .bottom).combined(with: .opacity))
+                }
                 guidancePanel
                 controls
             }
+            .animation(.smooth, value: scanner.isLensSmudged)
         }
+    }
+
+    /// Vision flagged the lens as smudged; a dirty lens hides early aphid damage.
+    private var lensBanner: some View {
+        Label {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Wipe the camera lens")
+                    .font(.subheadline.weight(.semibold))
+                Text("It looks smudged, which blurs leaves and hides early damage.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        } icon: {
+            Image(systemName: "camera.aperture")
+                .font(.title3)
+                .foregroundStyle(.yellow)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(12)
+        .glassEffect(.regular, in: .rect(cornerRadius: 18))
+        .accessibilityElement(children: .combine)
     }
 
     private func outsideFieldBanner(_ status: GeofenceStatus) -> some View {

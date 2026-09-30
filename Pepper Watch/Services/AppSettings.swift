@@ -27,6 +27,9 @@ nonisolated enum SettingsKey {
     static let iouThreshold = "detector.iouThreshold"
     static let computeUnits = "detector.computeUnits"
     static let classAgnosticNMS = "detector.classAgnosticNMS"
+    static let fastPrediction = "detector.fastPrediction"
+    static let pipelinedInference = "detector.pipelinedInference"
+    static let lensSmudgeCheck = "camera.lensSmudgeCheck"
     static let captureQuality = "camera.captureQuality"
     static let showLabels = "overlay.showLabels"
     static let showConfidence = "overlay.showConfidence"
@@ -48,6 +51,9 @@ nonisolated enum AppSettings {
         SettingsKey.iouThreshold: 0.7,
         SettingsKey.computeUnits: ComputeUnitsOption.all.rawValue,
         SettingsKey.classAgnosticNMS: true,
+        SettingsKey.fastPrediction: true,
+        SettingsKey.pipelinedInference: true,
+        SettingsKey.lensSmudgeCheck: true,
         SettingsKey.captureQuality: CaptureQuality.hd720.rawValue,
         SettingsKey.showLabels: true,
         SettingsKey.showConfidence: true,
@@ -73,9 +79,16 @@ nonisolated enum AppSettings {
             confidenceThreshold: store.double(forKey: SettingsKey.confidenceThreshold),
             iouThreshold: store.double(forKey: SettingsKey.iouThreshold),
             computeUnits: ComputeUnitsOption(rawValue: store.string(forKey: SettingsKey.computeUnits) ?? "") ?? .all,
-            classAgnosticNMS: store.bool(forKey: SettingsKey.classAgnosticNMS)
+            classAgnosticNMS: store.bool(forKey: SettingsKey.classAgnosticNMS),
+            fastPrediction: store.bool(forKey: SettingsKey.fastPrediction)
         )
     }
+
+    /// Up to two camera frames in flight on devices with a Neural Engine.
+    static var pipelinedInference: Bool { store.bool(forKey: SettingsKey.pipelinedInference) }
+
+    /// Periodic lens smudge check while scanning.
+    static var lensSmudgeCheck: Bool { store.bool(forKey: SettingsKey.lensSmudgeCheck) }
 
     static var captureQuality: CaptureQuality {
         CaptureQuality(rawValue: store.string(forKey: SettingsKey.captureQuality) ?? "") ?? .hd720

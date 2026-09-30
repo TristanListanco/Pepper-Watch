@@ -1,2 +1,5 @@
 # Thesis manuscript (reference only, not part of the app)
 /Pepper Watch  - Revised Thesis Proposal Manuscript .pdf
+
+# Source model export; the app bundles it as Pepper Watch/Model/AphidDetector.mlpackage
+/best.mlpackage

@@ -52,18 +52,47 @@ nonisolated struct DetectorConfiguration: Equatable, Sendable {
     /// The exported NMS is per-class, so one leaf can come back as both healthy and infested.
     /// When on, overlapping boxes of different classes keep only the most confident one.
     var classAgnosticNMS: Bool
+    /// Ask Core ML to specialize the model for the lowest prediction latency.
+    var fastPrediction: Bool
+
+    var loadOptions: ModelLoadOptions {
+        ModelLoadOptions(computeUnits: computeUnits, fastPrediction: fastPrediction)
+    }
 }
 
-/// A compiled model loaded for a particular set of compute units.
+/// Everything that needs a model reload when it changes; thresholds don't.
+nonisolated struct ModelLoadOptions: Equatable, Sendable {
+    var computeUnits: ComputeUnitsOption
+    var fastPrediction: Bool
+
+    /// The Core ML configuration for these options, shared by loading and the compute plan.
+    var mlConfiguration: MLModelConfiguration {
+        let configuration = MLModelConfiguration()
+        configuration.computeUnits = computeUnits.mlComputeUnits
+        // FP16 accumulation on the GPU path; the model is FP16 already, so accuracy is unchanged.
+        configuration.allowLowPrecisionAccumulationOnGPU = true
+        var hints = MLOptimizationHints()
+        // Camera frames are always scaled to the same 640×640 input.
+        hints.reshapeFrequency = .infrequent
+        // Newer Neural Engines benefit most: a slower first load buys lower per-frame latency.
+        hints.specializationStrategy = fastPrediction ? .fastPrediction : .default
+        configuration.optimizationHints = hints
+        return configuration
+    }
+}
+
+/// A compiled model loaded with particular options.
 /// `MLModel` is not annotated `Sendable`, but predictions on a loaded model are thread-safe.
 nonisolated final class LoadedModel: @unchecked Sendable {
     let mlModel: MLModel
-    let computeUnits: ComputeUnitsOption
+    let options: ModelLoadOptions
     let loadDuration: Duration
 
-    init(mlModel: MLModel, computeUnits: ComputeUnitsOption, loadDuration: Duration) {
+    var computeUnits: ComputeUnitsOption { options.computeUnits }
+
+    init(mlModel: MLModel, options: ModelLoadOptions, loadDuration: Duration) {
         self.mlModel = mlModel
-        self.computeUnits = computeUnits
+        self.options = options
         self.loadDuration = loadDuration
     }
 }
@@ -105,14 +134,12 @@ nonisolated final class AphidDetector: @unchecked Sendable {
         return url
     }
 
-    @concurrent static func loadModel(computeUnits: ComputeUnitsOption) async throws -> LoadedModel {
+    @concurrent static func loadModel(options: ModelLoadOptions) async throws -> LoadedModel {
         let url = try modelURL()
-        let configuration = MLModelConfiguration()
-        configuration.computeUnits = computeUnits.mlComputeUnits
         let clock = ContinuousClock()
         let start = clock.now
-        let model = try await MLModel.load(contentsOf: url, configuration: configuration)
-        return LoadedModel(mlModel: model, computeUnits: computeUnits, loadDuration: start.duration(to: clock.now))
+        let model = try await MLModel.load(contentsOf: url, configuration: options.mlConfiguration)
+        return LoadedModel(mlModel: model, options: options, loadDuration: start.duration(to: clock.now))
     }
 
     /// Runs detection on an upright camera frame.

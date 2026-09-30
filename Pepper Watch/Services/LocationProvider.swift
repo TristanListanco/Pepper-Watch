@@ -8,16 +8,31 @@ import Observation
 
 /// Streams the device location while the Scan tab is active: it drives field recommendations,
 /// geofence checks and geotagged detections.
+///
+/// Kept light on power and on the main thread: Core Location pauses the stream while the device
+/// is stationary, and a new position is only published when it matters (a real move, a clearly
+/// better fix, or a while since the last one), so views don't re-render for GPS jitter.
 @Observable
 final class LocationProvider {
     private(set) var lastLocation: CLLocation?
     /// Reverse-geocoded name of the current position, refreshed after moving a meaningful distance.
     private(set) var placeName: String?
     private(set) var isDenied = false
+    /// Precise Location is off, so fixes are too coarse to verify a scan is inside a field.
+    private(set) var isAccuracyLimited = false
+
+    /// Updates received and published since launch, for the developer diagnostics.
+    @ObservationIgnored private(set) var updatesReceived = 0
+    @ObservationIgnored private(set) var updatesPublished = 0
 
     @ObservationIgnored private var updatesTask: Task<Void, Never>?
     @ObservationIgnored private var serviceSession: CLServiceSession?
     @ObservationIgnored private var lastGeocodedLocation: CLLocation?
+
+    /// Publish thresholds: field boundaries are tens of meters, so smaller changes are noise.
+    private static let minimumMove: CLLocationDistance = 5
+    private static let minimumAccuracyGain: CLLocationAccuracy = 5
+    private static let maximumQuietInterval: TimeInterval = 30
 
     var isRunning: Bool { updatesTask != nil }
 
@@ -26,13 +41,11 @@ final class LocationProvider {
         serviceSession = CLServiceSession(authorization: .whenInUse)
         updatesTask = Task { [weak self] in
             do {
-                for try await update in CLLocationUpdate.liveUpdates() {
+                // The general-purpose configuration: Core Location picks the radios and backs off
+                // while stationary. Navigation configurations would keep GPS at full power.
+                for try await update in CLLocationUpdate.liveUpdates(.default) {
                     guard let self else { return }
-                    self.isDenied = update.authorizationDenied || update.authorizationDeniedGlobally
-                    if let location = update.location {
-                        self.lastLocation = location
-                        self.refreshPlaceName(for: location)
-                    }
+                    self.handle(update)
                 }
             } catch {
                 // Updates end on cancellation; the last known location stays usable.
@@ -45,6 +58,29 @@ final class LocationProvider {
         updatesTask = nil
         serviceSession?.invalidate()
         serviceSession = nil
+    }
+
+    private func handle(_ update: CLLocationUpdate) {
+        updatesReceived += 1
+        // Only write observed properties when they change, so views don't re-render needlessly.
+        let denied = update.authorizationDenied || update.authorizationDeniedGlobally
+        if denied != isDenied { isDenied = denied }
+        if update.accuracyLimited != isAccuracyLimited { isAccuracyLimited = update.accuracyLimited }
+
+        // While stationary Core Location repeats the last fix; nothing new to publish.
+        guard !update.stationary, let location = update.location, location.horizontalAccuracy >= 0,
+              shouldPublish(location)
+        else { return }
+        updatesPublished += 1
+        lastLocation = location
+        refreshPlaceName(for: location)
+    }
+
+    private func shouldPublish(_ location: CLLocation) -> Bool {
+        guard let last = lastLocation else { return true }
+        if location.distance(from: last) >= Self.minimumMove { return true }
+        if last.horizontalAccuracy - location.horizontalAccuracy >= Self.minimumAccuracyGain { return true }
+        return location.timestamp.timeIntervalSince(last.timestamp) >= Self.maximumQuietInterval
     }
 
     /// Pull to refresh: waits briefly for a fresh fix, then looks up the place name again.
