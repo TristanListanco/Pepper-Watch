@@ -47,7 +47,8 @@ nonisolated struct WatchFieldQuery: EntityQuery {
 
     /// The fields the iPhone last synced.
     static func fields() -> [WatchFieldEntity] {
-        (WatchStore.payload?.snapshot.fields ?? []).map(WatchFieldEntity.init)
+        // The watch's own order, so a new widget starts on the field placed first.
+        WatchStore.ordered(WatchStore.payload?.snapshot.fields ?? []).map(WatchFieldEntity.init)
     }
 }
 
@@ -83,6 +84,49 @@ struct WatchFieldIntent: WidgetConfigurationIntent {
     static var parameterSummary: some ParameterSummary {
         Summary("Show \(\.$metric) for \(\.$field)")
     }
+}
+
+// MARK: - Control (watchOS 26)
+
+/// Which field the Field Status control shows and opens.
+struct FieldControlIntent: ControlConfigurationIntent {
+    static let title: LocalizedStringResource = "Field Status"
+    static let description = IntentDescription("Choose the field the control shows.")
+
+    @Parameter(title: "Field")
+    var field: WatchFieldEntity?
+
+    init() {}
+}
+
+/// Opens the watch app on a field. Controls run it in the app, which switches to that field.
+struct OpenFieldIntent: AppIntent {
+    static let title: LocalizedStringResource = "Open Field"
+    static let description = IntentDescription("Opens a field's insights in Pepper Watch.")
+    static let supportedModes: IntentModes = .foreground
+    static let isDiscoverable = false
+
+    @Parameter(title: "Field")
+    var field: WatchFieldEntity?
+
+    init() {}
+
+    init(field: WatchFieldEntity?) {
+        self.field = field
+    }
+
+    func perform() async throws -> some IntentResult {
+        // The app follows this setting to the field.
+        if let id = field?.id {
+            UserDefaults.standard.set(id, forKey: WatchFieldSelection.key)
+        }
+        return .result()
+    }
+}
+
+/// The field the watch app shows, shared by the app and the control's intent.
+nonisolated enum WatchFieldSelection {
+    static let key = "watch.selectedField"
 }
 
 // MARK: - Relevance

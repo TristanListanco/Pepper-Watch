@@ -11,6 +11,7 @@
 import Charts
 import MapKit
 import SwiftUI
+import TipKit
 
 typealias TrendRange = WatchPayload.TrendRange
 
@@ -23,6 +24,10 @@ struct InsightsPager: View {
     /// Held in state so a range change animates every page's values; saved for next time.
     @State private var range: TrendRange
     @AppStorage("watch.range") private var savedRange = TrendRange.week.rawValue
+    /// Tapping a chart zooms it into its breakdown (watchOS 11).
+    @Namespace private var chartTransition
+    /// Always On with the wrist down: large bright backgrounds dim to save power (watchOS 8).
+    @Environment(\.isLuminanceReduced) private var isLuminanceReduced
 
     init(status: WidgetSnapshot.FieldStatus, trends: [String: WatchPayload.Trend]?) {
         self.status = status
@@ -83,18 +88,26 @@ struct InsightsPager: View {
         NavigationStack(path: $path) {
             TabView(selection: $page) {
                 ForEach(pages, id: \.self) { page in
-                    content(for: page, stats: stats, trend: trend)
-                        .containerBackground(for: .tabView) {
-                            if page == .location {
-                                LocationMap(status: status)
-                            } else {
-                                pageGradient(tint(for: page, stats: stats))
+                    Tab(value: page) {
+                        content(for: page, stats: stats, trend: trend)
+                            .containerBackground(for: .tabView) {
+                                if page == .location {
+                                    LocationMap(status: status)
+                                        .opacity(isLuminanceReduced ? 0.35 : 1)
+                                } else if isLuminanceReduced {
+                                    // A deep tint instead of the bright gradient while dimmed.
+                                    tint(for: page, stats: stats).mix(with: .black, by: 0.85)
+                                } else {
+                                    pageGradient(tint(for: page, stats: stats))
+                                }
                             }
-                        }
-                        .tag(page)
+                    }
                 }
             }
             .tabViewStyle(.verticalPage(transitionStyle: .blur))
+            .environment(\.chartTransition, chartTransition)
+            // A tick on the wrist for each range step, whether tapped or double tapped.
+            .sensoryFeedback(.selection, trigger: range)
             .navigationTitle(status.name)
             .toolbar {
                 if page.usesRange {
@@ -102,6 +115,7 @@ struct InsightsPager: View {
                         Button {
                             withAnimation(.smooth) { range = range.next }
                             savedRange = range.rawValue
+                            RangeShortcutTip().invalidate(reason: .actionPerformed)
                         } label: {
                             Text(range.rawValue)
                                 .font(.system(.footnote, design: .rounded).weight(.bold))
@@ -109,6 +123,10 @@ struct InsightsPager: View {
                         }
                         .tint(page.tint)
                         .handGestureShortcut(.primaryAction)
+                        // With larger text, touch and hold to see "6M" enlarged (watchOS 27).
+                        .accessibilityShowsLargeContentViewer {
+                            Label(range.periodTitle, systemImage: "calendar")
+                        }
                         .accessibilityLabel("Range")
                         .accessibilityValue(range.periodTitle)
                     }
@@ -116,9 +134,16 @@ struct InsightsPager: View {
             }
             .navigationDestination(for: InsightPage.self) { page in
                 Breakdown(page: page, range: range, trend: trend)
+                    .navigationTransition(.zoom(sourceID: page, in: chartTransition))
             }
         }
         .navigationTransition(.crossFade)
+        // Handoff: the iPhone offers to continue in this field's Insights.
+        .userActivity(HandoffActivity.viewField) { activity in
+            activity.title = "\(status.name) Insights"
+            activity.userInfo = [HandoffActivity.fieldIDKey: status.id]
+            activity.isEligibleForHandoff = true
+        }
     }
 
     @ViewBuilder
@@ -136,6 +161,11 @@ struct InsightsPager: View {
     private func tint(for page: InsightPage, stats: ScopeStats) -> Color {
         page == .summary ? stats.current.severity?.color ?? .brand : page.tint
     }
+}
+
+extension EnvironmentValues {
+    /// The pager's namespace for zooming a chart into its breakdown.
+    @Entry var chartTransition: Namespace.ID?
 }
 
 // MARK: - Ranges and trends
@@ -272,14 +302,33 @@ private func timeAxis(_ range: TrendRange, tint: Color) -> some AxisContent {
 /// It's drawn past the page's frame rather than resizing the page, so paging stays put.
 private let bottomBand: CGFloat = 26
 
+private extension View {
+    /// Sizes the view to its page plus the band the pager keeps free at the bottom, like native
+    /// full-screen layouts (container-relative sizing, watchOS 27). It hangs from the top of the
+    /// page and runs into the band rather than resizing the page, so paging stays put.
+    func fillsPage(alignment: Alignment) -> some View {
+        Color.clear.overlay(alignment: .top) {
+            containerRelativeFrame([.horizontal, .vertical], alignment: alignment) { length, axis in
+                axis == .vertical ? length + bottomBand : length
+            }
+        }
+    }
+}
+
 /// Grows chart marks from zero when a page first appears.
 private struct GrowIn: ViewModifier {
     @Binding var progress: Double
+    @Environment(\.isLuminanceReduced) private var isLuminanceReduced
 
     func body(content: Content) -> some View {
         content.onAppear {
             guard progress == 0 else { return }
-            withAnimation(.smooth(duration: 0.9).delay(0.1)) { progress = 1 }
+            // Always On shows the finished chart rather than animating while dimmed.
+            if isLuminanceReduced {
+                progress = 1
+            } else {
+                withAnimation(.smooth(duration: 0.9).delay(0.1)) { progress = 1 }
+            }
         }
     }
 }
@@ -293,24 +342,27 @@ private struct MetricPage<ChartContent: View>: View {
     /// The most important finding is shown; later ones are for VoiceOver.
     let findings: [String]
     @ViewBuilder var chart: ChartContent
+    @Environment(\.chartTransition) private var chartTransition
 
     var body: some View {
-        GeometryReader { proxy in
-            VStack(alignment: .leading, spacing: 6) {
-                NavigationLink(value: page) {
-                    chart
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                }
-                .buttonStyle(.plain)
-                .accessibilityHint("Shows the breakdown")
-
-                caption
-                    .scenePadding(.horizontal)
-                    .padding(.bottom, 4)
+        VStack(alignment: .leading, spacing: 6) {
+            NavigationLink(value: page) {
+                chart
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
-            .frame(width: proxy.size.width, height: proxy.size.height + bottomBand, alignment: .top)
+            .buttonStyle(.plain)
+            .matchedTransitionSource(id: page, in: chartTransition ?? fallbackTransition)
+            .accessibilityHint("Shows the breakdown")
+
+            caption
+                .scenePadding(.horizontal)
+                .padding(.bottom, 4)
         }
+        .fillsPage(alignment: .top)
     }
+
+    /// Only used if the pager didn't provide a namespace.
+    @Namespace private var fallbackTransition
 
     private var caption: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -341,6 +393,8 @@ private struct MetricPage<ChartContent: View>: View {
                     .contentTransition(.numericText())
             }
         }
+        // Grows with Dynamic Type, up to a size that still leaves the chart room (watchOS 8).
+        .dynamicTypeSize(...DynamicTypeSize.accessibility1)
         // Values roll to their new numbers when the range changes.
         .animation(.smooth, value: value)
         .animation(.smooth, value: findings)
@@ -379,6 +433,8 @@ private struct ContextLine: View {
 /// Severity as an icon and label on a Liquid Glass capsule tinted with the status color.
 private struct SeverityChip: View {
     let severity: Severity?
+    /// The icon draws itself in as the donut sweeps (SF Symbols 7, watchOS 26).
+    @State private var isDrawn = false
 
     var body: some View {
         Label {
@@ -387,6 +443,15 @@ private struct SeverityChip: View {
         } icon: {
             Image(systemName: severity?.symbol ?? "camera.viewfinder")
                 .foregroundStyle(severity?.color ?? .secondary)
+                .symbolEffect(.drawOff, isActive: !isDrawn)
+                // A severe field's icon wiggles every few seconds to draw the eye (SF Symbols 6).
+                .symbolEffect(.wiggle, options: .repeat(.periodic(delay: 4)), isActive: isDrawn && severity == .severe)
+                // Swaps smoothly when new numbers change the severity (watchOS 27).
+                .contentTransition(.symbolEffect(.replace))
+        }
+        .task {
+            try? await Task.sleep(for: .milliseconds(350))
+            isDrawn = true
         }
         .font(.footnote.weight(.semibold))
         .padding(.horizontal, 12)
@@ -403,24 +468,18 @@ private struct SummaryPage: View {
     let status: WidgetSnapshot.FieldStatus
     let stats: ScopeStats
 
-    /// Room for the severity chip and the last-scan line under the donut.
-    private let captionHeight: CGFloat = 60
-
     var body: some View {
-        GeometryReader { proxy in
-            let height = proxy.size.height + bottomBand
-            let side = max(min(proxy.size.width, height - captionHeight), 60)
-            VStack(spacing: 8) {
-                InfestationDonut(aphid: stats.current.aphidLeaves, total: stats.current.totalLeaves)
-                    .frame(width: side, height: side)
-                SeverityChip(severity: stats.current.severity)
-                if let latest = status.latestScan {
-                    ContextLine(text: latest.formatted(.relative(presentation: .numeric, unitsStyle: .abbreviated)), symbol: "clock")
-                }
+        VStack(spacing: 8) {
+            // As large as the screen allows above the chip and the last-scan line.
+            InfestationDonut(aphid: stats.current.aphidLeaves, total: stats.current.totalLeaves)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
+            SeverityChip(severity: stats.current.severity)
+            if let latest = status.latestScan {
+                ContextLine(text: latest.formatted(.relative(presentation: .numeric, unitsStyle: .abbreviated)), symbol: "clock")
             }
-            .frame(width: proxy.size.width, height: height)
         }
         .scenePadding(.horizontal)
+        .fillsPage(alignment: .center)
     }
 }
 
@@ -610,27 +669,25 @@ private struct LocationPage: View {
     let severity: Severity?
 
     var body: some View {
-        GeometryReader { proxy in
-            VStack(alignment: .leading, spacing: 2) {
-                Label(status.locationName.isEmpty ? "Field location" : status.locationName, systemImage: "mappin.and.ellipse")
-                    .font(.footnote.weight(.semibold))
-                    .foregroundStyle(.primary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.8)
-                Label {
-                    Text(statusLine)
-                        .foregroundStyle(.secondary)
-                } icon: {
-                    Image(systemName: severity?.symbol ?? "camera.viewfinder")
-                        .foregroundStyle(severity?.color ?? .secondary)
-                }
-                .font(.caption2.weight(.medium))
+        VStack(alignment: .leading, spacing: 2) {
+            Label(status.locationName.isEmpty ? "Field location" : status.locationName, systemImage: "mappin.and.ellipse")
+                .font(.footnote.weight(.semibold))
+                .foregroundStyle(.primary)
                 .lineLimit(1)
+                .minimumScaleFactor(0.8)
+            Label {
+                Text(statusLine)
+                    .foregroundStyle(.secondary)
+            } icon: {
+                Image(systemName: severity?.symbol ?? "camera.viewfinder")
+                    .foregroundStyle(severity?.color ?? .secondary)
             }
-            .scenePadding(.horizontal)
-            .padding(.bottom, 8)
-            .frame(width: proxy.size.width, height: proxy.size.height + bottomBand, alignment: .bottomLeading)
+            .font(.caption2.weight(.medium))
+            .lineLimit(1)
         }
+        .scenePadding(.horizontal)
+        .padding(.bottom, 8)
+        .fillsPage(alignment: .bottomLeading)
         .accessibilityElement(children: .combine)
     }
 
@@ -651,31 +708,35 @@ private struct Breakdown: View {
 
     var body: some View {
         let buckets = Array((trend?.buckets ?? []).filter { $0.scans > 0 }.reversed())
-        List(buckets) { bucket in
-            HStack {
-                VStack(alignment: .leading, spacing: 0) {
-                    Text(title(for: bucket.start))
-                        .font(.headline)
-                        .foregroundStyle(.primary)
-                    if let subtitle = subtitle(for: bucket.start) {
-                        Text(subtitle)
+        List {
+            TipView(RangeShortcutTip())
+                .listRowBackground(Color.clear)
+            ForEach(buckets) { bucket in
+                HStack {
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text(title(for: bucket.start))
+                            .font(.headline)
+                            .foregroundStyle(.primary)
+                        if let subtitle = subtitle(for: bucket.start) {
+                            Text(subtitle)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    Spacer(minLength: 6)
+                    VStack(alignment: .trailing, spacing: 0) {
+                        Text(value(for: bucket))
+                            .font(.system(.title3, design: .rounded).weight(.semibold))
+                            .foregroundStyle(.primary)
+                        Text(detail(for: bucket))
                             .font(.caption2)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(.tertiary)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
                     }
                 }
-                Spacer(minLength: 6)
-                VStack(alignment: .trailing, spacing: 0) {
-                    Text(value(for: bucket))
-                        .font(.system(.title3, design: .rounded).weight(.semibold))
-                        .foregroundStyle(.primary)
-                    Text(detail(for: bucket))
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-                }
+                .accessibilityElement(children: .combine)
             }
-            .accessibilityElement(children: .combine)
         }
         .overlay {
             if buckets.isEmpty {

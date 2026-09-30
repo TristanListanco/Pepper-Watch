@@ -84,10 +84,139 @@ struct AtFieldWidget: Widget {
     }
 }
 
+// MARK: - Your Fields (accessory widget group)
+
+struct YourFieldsEntry: TimelineEntry {
+    let date: Date
+    let fields: [WidgetSnapshot.FieldStatus]
+
+    /// The field most in need of attention decides where the card ranks in the Smart Stack.
+    var relevance: TimelineEntryRelevance? {
+        TimelineEntryRelevance(score: fields.map { FieldRelevance.score(for: $0, now: date) }.max() ?? 0)
+    }
+
+    static var current: YourFieldsEntry {
+        // The first three in the order set on the watch.
+        YourFieldsEntry(date: .now, fields: Array(WatchStore.ordered(WatchStore.payload?.snapshot.fields ?? []).prefix(3)))
+    }
+}
+
+struct YourFieldsProvider: TimelineProvider {
+    func placeholder(in context: Context) -> YourFieldsEntry {
+        YourFieldsEntry(date: .now, fields: WidgetSnapshot.sample.fields)
+    }
+
+    func getSnapshot(in context: Context, completion: @escaping (YourFieldsEntry) -> Void) {
+        completion(context.isPreview && WatchStore.payload == nil ? placeholder(in: context) : .current)
+    }
+
+    func getTimeline(in context: Context, completion: @escaping (Timeline<YourFieldsEntry>) -> Void) {
+        let next = Calendar.current.date(byAdding: .hour, value: 1, to: .now) ?? .now
+        completion(Timeline(entries: [.current], policy: .after(next)))
+    }
+}
+
+/// Each field as a small gauge of this week's infestation, in its severity color.
+struct YourFieldsView: View {
+    let entry: YourFieldsEntry
+
+    var body: some View {
+        Group {
+            if entry.fields.isEmpty {
+                Label("Open Pepper Watch", systemImage: "leaf.fill")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            } else {
+                AccessoryWidgetGroup("Your Fields", systemImage: "leaf.fill") {
+                    ForEach(entry.fields) { field in
+                        let week = field.window(now: entry.date)
+                        // Each gauge opens its own field.
+                        Link(destination: .watchField(field.id)) {
+                            Gauge(value: week.infestationRate) {
+                                Text(field.name)
+                            } currentValueLabel: {
+                                Text(week.totalLeaves == 0 ? "—" : "\(Int((week.infestationRate * 100).rounded()))")
+                            }
+                            .gaugeStyle(.accessoryCircularCapacity)
+                            .tint(week.severity?.color ?? .secondary)
+                        }
+                        .accessibilityLabel("\(field.name), \(week.totalLeaves == 0 ? "no scans this week" : "\(week.infestationRate.percentText) infested")")
+                    }
+                }
+                .accessoryWidgetGroupStyle(.circular)
+            }
+        }
+        .containerBackground(Color.brand.gradient.opacity(0.4), for: .widget)
+    }
+}
+
+struct YourFieldsWidget: Widget {
+    var body: some WidgetConfiguration {
+        StaticConfiguration(kind: WatchWidgetKind.yourFields, provider: YourFieldsProvider()) { entry in
+            YourFieldsView(entry: entry)
+        }
+        .configurationDisplayName("Your Fields")
+        .description("Up to three fields' infestation at a glance, in your watch order.")
+        .supportedFamilies([.accessoryRectangular])
+    }
+}
+
+// MARK: - Control (watchOS 26)
+
+/// What the control shows: the field, its infestation rate this week and its severity.
+struct FieldControlValue {
+    let field: WatchFieldEntity?
+    let name: String
+    let rate: String
+    let symbol: String
+}
+
+struct FieldControlProvider: AppIntentControlValueProvider {
+    func previewValue(configuration: FieldControlIntent) -> FieldControlValue {
+        FieldControlValue(field: nil, name: configuration.field?.name ?? "Field A", rate: "12%", symbol: Severity.low.symbol)
+    }
+
+    func currentValue(configuration: FieldControlIntent) async throws -> FieldControlValue {
+        let fields = WatchStore.payload?.snapshot.fields ?? []
+        guard let status = fields.first(where: { $0.id == configuration.field?.id }) ?? fields.first else {
+            return FieldControlValue(field: nil, name: "Pepper Watch", rate: "No fields", symbol: "leaf")
+        }
+        let week = status.window()
+        return FieldControlValue(
+            field: WatchFieldEntity(status),
+            name: status.name,
+            rate: week.totalLeaves == 0 ? "No scans" : "\(week.infestationRate.percentText) infested",
+            symbol: week.severity?.symbol ?? "leaf.fill"
+        )
+    }
+}
+
+/// A field's infestation at a glance in Control Center, the Smart Stack or on the Action button;
+/// tapping it opens that field's insights.
+struct FieldStatusControl: ControlWidget {
+    var body: some ControlWidgetConfiguration {
+        AppIntentControlConfiguration(kind: WatchWidgetKind.fieldControl, provider: FieldControlProvider()) { value in
+            ControlWidgetButton(action: OpenFieldIntent(field: value.field)) {
+                Label {
+                    Text(value.name)
+                    // A second line becomes the control's value.
+                    Text(value.rate)
+                } icon: {
+                    Image(systemName: value.symbol)
+                }
+            }
+        }
+        .displayName("Field Status")
+        .description("A field's infestation this week. Opens its insights.")
+    }
+}
+
 @main
 struct PepperWatchWatchWidgets: WidgetBundle {
     var body: some Widget {
         FieldStatusWatchWidget()
         AtFieldWidget()
+        YourFieldsWidget()
+        FieldStatusControl()
     }
 }
