@@ -14,6 +14,9 @@ struct DeveloperView: View {
     @AppStorage(SettingsKey.iouThreshold) private var iouThreshold = 0.7
     @AppStorage(SettingsKey.computeUnits) private var computeUnits = ComputeUnitsOption.all.rawValue
     @AppStorage(SettingsKey.classAgnosticNMS) private var classAgnosticNMS = true
+    @AppStorage(SettingsKey.fastPrediction) private var fastPrediction = true
+    @AppStorage(SettingsKey.pipelinedInference) private var pipelinedInference = true
+    @AppStorage(SettingsKey.lensSmudgeCheck) private var lensSmudgeCheck = true
     @AppStorage(SettingsKey.captureQuality) private var captureQuality = CaptureQuality.hd720.rawValue
     @AppStorage(SettingsKey.showLabels) private var showLabels = true
     @AppStorage(SettingsKey.showConfidence) private var showConfidence = true
@@ -25,13 +28,14 @@ struct DeveloperView: View {
     @AppStorage(SettingsKey.geotagEnabled) private var geotagEnabled = true
     @AppStorage(SettingsKey.healthLogInterval) private var healthLogInterval = 30.0
     @AppStorage(SettingsKey.strictGeofence) private var strictGeofence = false
-    @AppStorage(SettingsKey.fpsTarget) private var fpsTarget = 17.0
-    @State private var showsWidgetGallery = Self.opensWidgetGallery
+    @State private var showsWidgetGallery = Self.opensPage("widgets")
+    @State private var showsModelCard = Self.opensPage("model")
+    @State private var showsPerformance = Self.opensPage("performance")
 
-    /// Debug builds accept `-PWDeveloperPage widgets` to open the widget gallery for screenshots.
-    private static var opensWidgetGallery: Bool {
+    /// Debug builds accept `-PWDeveloperPage widgets|model|performance` to open that page for screenshots.
+    private static func opensPage(_ page: String) -> Bool {
         #if DEBUG
-        UserDefaults.standard.string(forKey: "PWDeveloperPage") == "widgets"
+        UserDefaults.standard.string(forKey: "PWDeveloperPage") == page
         #else
         false
         #endif
@@ -42,24 +46,32 @@ struct DeveloperView: View {
             confidenceThreshold: confidenceThreshold,
             iouThreshold: iouThreshold,
             computeUnits: ComputeUnitsOption(rawValue: computeUnits) ?? .all,
-            classAgnosticNMS: classAgnosticNMS
+            classAgnosticNMS: classAgnosticNMS,
+            fastPrediction: fastPrediction
         )
     }
 
     var body: some View {
         NavigationStack {
             Form {
+                PerformanceSection { showsPerformance = true }
                 modelSection
                 detectionSection
+                cameraSection
                 overlaySection
                 loggingSection
-                diagnosticsSection
+                toolsSection
                 siriSection
                 DataManagementSection()
                 aboutSection
             }
+            // The same subtle wash as the Fields tab, behind the glass performance card.
+            .scrollContentBackground(.hidden)
+            .summaryGradientBackground()
             .navigationTitle("Developer")
             .navigationDestination(isPresented: $showsWidgetGallery) { WidgetGalleryView() }
+            .navigationDestination(isPresented: $showsModelCard) { ModelInfoView() }
+            .navigationDestination(isPresented: $showsPerformance) { PerformanceMonitorView() }
             .task(id: detectorConfiguration) {
                 // Debounce slider drags: a newer value cancels this task before it applies.
                 try? await Task.sleep(for: .milliseconds(150))
@@ -90,10 +102,13 @@ struct DeveloperView: View {
                 }
                 .padding(.vertical, 4)
             }
+            Picker("Compute units", selection: $computeUnits) {
+                ForEach(ComputeUnitsOption.allCases) { Text($0.title).tag($0.rawValue) }
+            }
+            Toggle("Fast prediction", isOn: $fastPrediction)
+            Toggle("Pipelined inference", isOn: $pipelinedInference)
         } header: {
             Text("Model")
-        } footer: {
-            Text("Model card, compute devices and an on-device latency benchmark.")
         }
     }
 
@@ -112,22 +127,17 @@ struct DeveloperView: View {
             thresholdSlider("Confidence threshold", value: $confidenceThreshold, range: 0.05...0.95)
             thresholdSlider("IoU threshold (NMS)", value: $iouThreshold, range: 0.1...0.95)
             Toggle("One class per leaf", isOn: $classAgnosticNMS)
-            Picker("Compute units", selection: $computeUnits) {
-                ForEach(ComputeUnitsOption.allCases) { Text($0.title).tag($0.rawValue) }
-            }
-            Picker("Camera resolution", selection: $captureQuality) {
-                ForEach(CaptureQuality.allCases) { Text($0.title).tag($0.rawValue) }
-            }
             Button("Restore Model Defaults", systemImage: "arrow.counterclockwise") {
                 confidenceThreshold = engine.modelInfo?.defaultConfidence ?? 0.25
                 iouThreshold = engine.modelInfo?.defaultIoU ?? 0.7
                 computeUnits = ComputeUnitsOption.all.rawValue
                 classAgnosticNMS = true
+                fastPrediction = true
+                pipelinedInference = true
+                lensSmudgeCheck = true
             }
         } header: {
             Text("Detection")
-        } footer: {
-            Text("Thresholds apply live. Lower confidence finds more early-stage damage but adds false alarms. “One class per leaf” drops the weaker label when the model marks the same leaf as both healthy and infested. Changing compute units reloads the model; camera resolution applies next time scanning starts.")
         }
     }
 
@@ -139,6 +149,17 @@ struct DeveloperView: View {
             Slider(value: value, in: range, step: 0.05)
                 .accessibilityLabel(title)
                 .accessibilityValue(value.wrappedValue.fixed(2))
+        }
+    }
+
+    private var cameraSection: some View {
+        Section {
+            Picker("Resolution", selection: $captureQuality) {
+                ForEach(CaptureQuality.allCases) { Text($0.title).tag($0.rawValue) }
+            }
+            Toggle("Lens smudge check", isOn: $lensSmudgeCheck)
+        } header: {
+            Text("Camera")
         }
     }
 
@@ -171,18 +192,11 @@ struct DeveloperView: View {
             }
         } header: {
             Text("Logging")
-        } footer: {
-            Text("Everything stays on this device. Auto-logging saves a frame, its bounding boxes and timestamp at the chosen interval while leaves are in view. Strict geofence blocks logging outside a field's boundary with no “Scan Anyway” override.")
         }
     }
 
-    private var diagnosticsSection: some View {
+    private var toolsSection: some View {
         Section {
-            NavigationLink {
-                PerformanceMonitorView()
-            } label: {
-                Label("Performance Monitor", systemImage: "gauge.with.dots.needle.67percent")
-            }
             NavigationLink {
                 SystemLogView()
             } label: {
@@ -196,13 +210,8 @@ struct DeveloperView: View {
             Button("Show Tips Again", systemImage: "lightbulb") {
                 PepperWatchTips.resetOnNextLaunch()
             }
-            Stepper(value: $fpsTarget, in: 5...60, step: 1) {
-                LabeledContent("Real-time target", value: "\(Int(fpsTarget)) FPS")
-            }
         } header: {
-            Text("Diagnostics")
-        } footer: {
-            Text("The thesis requires at least 17 FPS for real-time processing. Tips reappear the next time you open the app.")
+            Text("Tools")
         }
     }
 
@@ -217,8 +226,6 @@ struct DeveloperView: View {
                 .listRowBackground(Color.clear)
         } header: {
             Text("Siri & Shortcuts")
-        } footer: {
-            Text("Ask Siri “Check aphids in Pepper Watch”, “Summarize my fields in Pepper Watch” (uses Apple Intelligence on device), or “Start scanning in Pepper Watch”. Fields also appear in Spotlight.")
         }
     }
 
@@ -236,6 +243,118 @@ struct DeveloperView: View {
             LabeledContent("Classes", value: LeafClass.allCases.map(\.rawValue).joined(separator: ", "))
             LabeledContent("Network use", value: "None, fully offline")
         }
+    }
+}
+
+// MARK: - Performance
+
+/// Live readings at the top of the tab, in a Liquid Glass card that opens the Performance Monitor.
+private struct PerformanceSection: View {
+    let openMonitor: () -> Void
+
+    @Environment(ScanModel.self) private var scanner
+    @Environment(DeviceMonitor.self) private var monitor
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Query(ThroughputReading.lastSession) private var lastSessions: [ScanSession]
+    @AppStorage(SettingsKey.fpsTarget) private var fpsTarget = 17.0
+
+    var body: some View {
+        Section {
+            VStack(spacing: 0) {
+                // A plain button rather than a NavigationLink, so the stepper below keeps its own taps.
+                Button(action: openMonitor) {
+                    HStack(spacing: 12) {
+                        summary
+                        Image(systemName: "chevron.right")
+                            .font(.footnote.weight(.semibold))
+                            .foregroundStyle(.tertiary)
+                    }
+                    .contentShape(.rect)
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint("Opens the Performance Monitor")
+                .padding(.bottom, 14)
+
+                Divider()
+
+                Stepper(value: $fpsTarget, in: 5...60, step: 1) {
+                    LabeledContent("Real-time target", value: "\(Int(fpsTarget)) FPS")
+                }
+                .padding(.top, 10)
+            }
+            .padding(16)
+            .glassEffect(.regular, in: .rect(cornerRadius: 24))
+            .listRowInsets(EdgeInsets())
+            .listRowBackground(Color.clear)
+            .task { await monitor.monitor() }
+        } header: {
+            Text("Performance")
+        }
+    }
+
+    private var summary: some View {
+        let reading = ThroughputReading.current(scanner: scanner, lastSession: lastSessions.first)
+        return VStack(alignment: .leading, spacing: 12) {
+            verdict(reading)
+            Grid(alignment: .leading, horizontalSpacing: 16, verticalSpacing: 12) {
+                // One row when there's room (iPad), two on iPhone.
+                if horizontalSizeClass == .regular {
+                    GridRow { speedMetrics(reading); deviceMetrics }
+                } else {
+                    GridRow { speedMetrics(reading) }
+                    GridRow { deviceMetrics }
+                }
+            }
+        }
+        // Forms space label icons into a column; keep captions tight like a dashboard.
+        .labelIconToTitleSpacing(6)
+        .accessibilityElement(children: .combine)
+    }
+
+    @ViewBuilder
+    private func speedMetrics(_ reading: ThroughputReading?) -> some View {
+        metric("Throughput", value: reading.map { "\($0.fps.fixed(1)) FPS" } ?? "—", symbol: "speedometer")
+        metric("Inference", value: reading.map { "\($0.inferenceMs.fixed(1)) ms" } ?? "—", symbol: "timer")
+    }
+
+    @ViewBuilder
+    private var deviceMetrics: some View {
+        metric("Thermal state", value: monitor.snapshot.thermalState.title, symbol: monitor.snapshot.thermalState.symbol)
+        metric("Memory", value: "\(monitor.snapshot.memoryMB.fixed(0)) MB", symbol: "memorychip")
+    }
+
+    @ViewBuilder
+    private func verdict(_ reading: ThroughputReading?) -> some View {
+        if let reading {
+            let passes = reading.fps >= fpsTarget
+            let subject = reading.isLive ? "Scanning now" : "Last scan"
+            let status = reading.isLive
+                ? (passes ? "meets" : "is below")
+                : (passes ? "met" : "was below")
+            Label("\(subject) \(status) the \(fpsTarget.fixed(0)) FPS target", systemImage: passes ? Severity.clear.symbol : Severity.severe.symbol)
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(passes ? Severity.clear.color : Severity.severe.color)
+        } else {
+            Label("Scan once to measure throughput", systemImage: "gauge.with.dots.needle.67percent")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private func metric(_ title: String, value: String, symbol: String) -> some View {
+        VStack(alignment: .leading, spacing: 2) {
+            Label(title, systemImage: symbol)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+            Text(value)
+                .font(.title3.weight(.semibold).monospacedDigit())
+                .foregroundStyle(.primary)
+                .contentTransition(.numericText())
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 
@@ -290,8 +409,6 @@ private struct DataManagementSection: View {
             .disabled(events.isEmpty && sessions.isEmpty && logs.isEmpty && fields.isEmpty)
         } header: {
             Text("Local Data")
-        } footer: {
-            Text("Stored with SwiftData on this device only.")
         }
         .task { refreshStorage() }
         .confirmationDialog("Erase all local data?", isPresented: $isConfirmingErase, titleVisibility: .visible) {
@@ -333,5 +450,6 @@ extension Bundle {
     DeveloperView()
         .environment(PreviewSupport.engine)
         .environment(PreviewSupport.scanner)
+        .environment(DeviceMonitor())
         .modelContainer(PreviewSupport.container)
 }

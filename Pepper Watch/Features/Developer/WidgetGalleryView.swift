@@ -17,20 +17,27 @@ struct WidgetGalleryView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 28) {
                 if let snapshot {
-                    gallerySection("Home Screen") {
+                    gallerySection("Field Status") {
+                        let status = snapshot.fields.first ?? snapshot.overall
+                        let severity = status.window().severity
+                        homeScreenWidget(width: 158, severity: severity) {
+                            FieldStatusWidgetView(status: status, family: .systemSmall)
+                        }
+                        homeScreenWidget(width: 338, severity: severity) {
+                            FieldStatusWidgetView(status: status, family: .systemMedium)
+                        }
+                    }
+
+                    gallerySection("Field Actions") {
                         let options = WidgetActionsState.options(in: snapshot)
                         let index = options.isEmpty ? 0 : WidgetActionsState.selectedIndex % options.count
                         let severity = options.isEmpty ? nil : options[index].window().severity
-                        FieldActionsWidgetView(options: options, index: index, family: .systemSmall)
-                            .padding(16)
-                            .frame(width: 158, height: 158)
-                            .background(WidgetBackground(severity: severity))
-                            .clipShape(.rect(cornerRadius: 22))
-                        FieldActionsWidgetView(options: options, index: index, family: .systemMedium)
-                            .padding(16)
-                            .frame(width: 338, height: 158)
-                            .background(WidgetBackground(severity: severity))
-                            .clipShape(.rect(cornerRadius: 22))
+                        homeScreenWidget(width: 158, severity: severity) {
+                            FieldActionsWidgetView(options: options, index: index, family: .systemSmall)
+                        }
+                        homeScreenWidget(width: 338, severity: severity) {
+                            FieldActionsWidgetView(options: options, index: index, family: .systemMedium)
+                        }
                     }
 
                     gallerySection("Lock Screen") {
@@ -40,10 +47,6 @@ struct WidgetGalleryView: View {
                     ProgressView()
                         .frame(maxWidth: .infinity)
                 }
-
-                Text("To add a widget, touch and hold the Home Screen or Lock Screen, tap Edit, then Add Widget, and search for Pepper Watch. Edit a Lock Screen widget to choose its field; flip fields on the Home Screen widget with its arrows.")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
             }
             .padding()
             // Keep the preview column centered on iPad.
@@ -62,6 +65,15 @@ struct WidgetGalleryView: View {
                 .font(.title2.weight(.bold))
             content()
         }
+    }
+
+    /// A Home Screen widget at its iPhone size, on its severity gradient.
+    private func homeScreenWidget<Content: View>(width: CGFloat, severity: Severity?, @ViewBuilder content: () -> Content) -> some View {
+        content()
+            .padding(16)
+            .frame(width: width, height: 158)
+            .background(WidgetBackground(severity: severity))
+            .clipShape(.rect(cornerRadius: 22))
     }
 
     private func lockScreen(_ snapshot: WidgetSnapshot) -> some View {

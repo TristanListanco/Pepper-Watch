@@ -4,6 +4,7 @@
 //
 
 import AVFoundation
+import CoreML
 import CoreLocation
 import Observation
 import SwiftData
@@ -44,6 +45,13 @@ final class ScanModel {
     private(set) var sessionStartedAt: Date?
     private(set) var eventsLoggedThisSession = 0
     private(set) var snapshotCount = 0
+    /// Vision thinks the lens is smudged; the scanner asks the farmer to wipe it.
+    private(set) var isLensSmudged = false
+    /// How much of the device scanning uses, from heat, Low Power Mode and settings.
+    private(set) var resourcePlan = ResourcePlan.current(allowsPipelining: false, lensCheck: false)
+
+    /// Camera frames analyzed at once: 2 on devices with a Neural Engine while cool, else 1.
+    var framesInFlight: Int { resourcePlan.framesInFlight }
     /// The field being scanned. Detections are logged to it and verified against its geofence.
     private(set) var field: Field?
     /// The user chose to keep logging while outside the field (not allowed in strict mode).
@@ -64,6 +72,7 @@ final class ScanModel {
     @ObservationIgnored private var lastHealthLogAt = Date.distantPast
     @ObservationIgnored private var severityCandidate: Severity?
     @ObservationIgnored private var severityCandidateFrames = 0
+    @ObservationIgnored private var smudgedChecks = 0
 
     // Current session accumulators.
     @ObservationIgnored private var session: ScanSession?
@@ -86,17 +95,75 @@ final class ScanModel {
                     self?.handle(frame)
                 }
             },
-            Task {
+            Task { [weak self] in
                 for await detector in Observations({ engine.detector }) {
                     camera.setDetector(detector)
+                    // Compute units may have changed with the reload.
+                    self?.updateResourcePlan()
                 }
             },
             Task { [weak self] in
                 for await _ in NotificationCenter.default.notifications(named: ProcessInfo.thermalStateDidChangeNotification) {
                     self?.logThermalChange()
+                    self?.updateResourcePlan()
+                }
+            },
+            Task { [weak self] in
+                for await _ in NotificationCenter.default.notifications(named: .NSProcessInfoPowerStateDidChange) {
+                    self?.updateResourcePlan()
+                }
+            },
+            Task { [weak self] in
+                for await confidence in camera.lensChecks {
+                    self?.handleLensCheck(confidence)
                 }
             },
         ]
+    }
+
+    /// Applies the current resource plan: two frames in flight keep a Neural Engine busy on newer
+    /// devices, while heat and Low Power Mode lower the camera frame rate and pause the lens check.
+    func updateResourcePlan(force: Bool = false) {
+        let hasNeuralEngine = MLComputeDevice.allComputeDevices.contains { if case .neuralEngine = $0 { true } else { false } }
+        let plan = ResourcePlan.current(
+            allowsPipelining: AppSettings.pipelinedInference && hasNeuralEngine && engine.activeComputeUnits != .cpuOnly,
+            lensCheck: AppSettings.lensSmudgeCheck
+        )
+        guard force || plan != resourcePlan else { return }
+        let modeChanged = plan.mode != resourcePlan.mode
+        resourcePlan = plan
+        camera.setMaxInFlight(plan.framesInFlight)
+        camera.setFrameRateCap(plan.cameraFrameRate)
+        camera.setChecksLens(plan.checksLens)
+        if modeChanged {
+            logger.log(category: "resources", "\(plan.mode.title): camera \(plan.cameraFrameRate.map { "\($0) FPS" } ?? "default rate"), \(plan.framesInFlight) frame\(plan.framesInFlight == 1 ? "" : "s") in flight")
+        }
+        if status == .running { reportScanningState() }
+    }
+
+    /// Tells MetricKit the app is scanning and with which setup, so daily reports can split it out.
+    private func reportScanningState() {
+        AppActivity.scanning(ScanningSetup(
+            computeUnits: engine.activeComputeUnits?.rawValue ?? "unknown",
+            fastPrediction: engine.activeOptions?.fastPrediction ?? false,
+            framesInFlight: resourcePlan.framesInFlight,
+            cameraFrameRate: resourcePlan.cameraFrameRate ?? 0,
+            resourceMode: resourcePlan.mode.rawValue
+        ))
+    }
+
+    /// Two smudged readings in a row raise the warning; a clearly clean one drops it.
+    private func handleLensCheck(_ confidence: Float) {
+        if confidence >= LensInspector.smudgedThreshold {
+            smudgedChecks += 1
+            if smudgedChecks >= 2, !isLensSmudged {
+                isLensSmudged = true
+                logger.log(.warning, category: "camera", "Lens looks smudged (\(Int(confidence * 100))% confidence)")
+            }
+        } else if confidence < LensInspector.clearThreshold {
+            smudgedChecks = 0
+            isLensSmudged = false
+        }
     }
 
     // MARK: - Lifecycle
@@ -151,9 +218,12 @@ final class ScanModel {
         isPaused = true
         camera.setPaused(true)
         camera.start()
+        // After configuring, since a new capture format resets the camera frame rate.
+        updateResourcePlan(force: true)
         if isTorchOn { camera.setTorch(true) }
         beginSession()
         status = .running
+        reportScanningState()
         logger.log(category: "camera", "Scanning started in \(field.name) (\(AppSettings.captureQuality.title))")
     }
 
@@ -163,10 +233,13 @@ final class ScanModel {
         camera.stop()
         endSession()
         status = .idle
+        AppActivity.idle()
         detections = []
         summary = DetectionSummary()
         stableSeverity = nil
         severityCandidate = nil
+        isLensSmudged = false
+        smudgedChecks = 0
         latestFrame = nil
         lastFrameAt = nil
         isTorchOn = false

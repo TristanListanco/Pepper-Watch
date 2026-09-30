@@ -153,6 +153,11 @@ struct FieldsHomeView: View {
     private var recommendationCard: some View {
         let regions = fields.map(\.region)
         VStack(alignment: .leading, spacing: 14) {
+            if location.isAccuracyLimited, !location.isDenied {
+                Label("Precise Location is off, so scans can't be verified inside a field.", systemImage: "location.slash")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+            }
             if location.isDenied {
                 Text("Turn on location access to find the field you're standing in and verify scans.")
                     .font(.subheadline)

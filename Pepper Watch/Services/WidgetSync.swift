@@ -61,6 +61,10 @@ final class WidgetSync {
         let snapshot = Self.makeSnapshot(from: context)
         snapshot.save()
         WidgetCenter.shared.reloadAllTimelines()
+        // Field locations, severity and scouting dates drive Smart Rotate; have the system re-read them.
+        for kind in PhoneWidgetKind.all {
+            WidgetCenter.shared.invalidateRelevance(ofKind: kind)
+        }
         watch?.send(snapshot)
     }
 
