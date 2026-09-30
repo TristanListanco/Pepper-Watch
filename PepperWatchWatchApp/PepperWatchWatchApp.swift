@@ -11,6 +11,10 @@ import SwiftUI
 struct PepperWatchWatchApp: App {
     @State private var phone = PhoneConnection()
 
+    init() {
+        WatchTips.configure()
+    }
+
     var body: some Scene {
         WindowGroup {
             ContentView()
@@ -20,6 +24,10 @@ struct PepperWatchWatchApp: App {
         // New numbers from the iPhone reach the app and its widgets even while it's suspended.
         .backgroundTask(.watchConnectivity) { [phone] in
             await phone.receivePendingContent()
+        }
+        // Each morning, the Smart Stack's scouting and severity timing is refreshed.
+        .backgroundTask(.appRefresh(DailyRefresh.taskID)) { [phone] in
+            await phone.refreshForNewDay()
         }
     }
 }

@@ -25,7 +25,7 @@ nonisolated struct FieldEntry: TimelineEntry, RelevanceEntry {
     }
 
     static func current(fieldID: String?, metric: WidgetMetric = .infestation, now: Date = .now) -> FieldEntry {
-        let fields = WatchStore.payload?.snapshot.fields ?? []
+        let fields = WatchStore.ordered(WatchStore.payload?.snapshot.fields ?? [])
         guard let payload = WatchStore.payload,
               let status = fields.first(where: { $0.id == fieldID }) ?? fields.first
         else {
