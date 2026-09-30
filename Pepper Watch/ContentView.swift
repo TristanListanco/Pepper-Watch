@@ -40,6 +40,11 @@ struct ContentView: View {
         .tint(Color(.accent))
         // Widget taps arrive as pepperwatch:// links.
         .onOpenURL { navigator.open($0) }
+        // Handoff from the watch: continue in Insights for the field it was showing.
+        .onContinueUserActivity(HandoffActivity.viewField) { activity in
+            guard let id = activity.userInfo?[HandoffActivity.fieldIDKey] as? String else { return }
+            navigator.showInsights(fieldID: UUID(uuidString: id))
+        }
         .onChange(of: navigator.selectedTab) { _, tab in
             if tab == .history { navigator.markHistorySeen() }
             restoredTab = tab

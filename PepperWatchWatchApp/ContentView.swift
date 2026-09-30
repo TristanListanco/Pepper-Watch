@@ -11,16 +11,18 @@
 
 import CoreLocation
 import SwiftUI
+import TipKit
+import WidgetKit
 
 struct ContentView: View {
     @Environment(PhoneConnection.self) private var phone
-    @AppStorage("watch.selectedField") private var savedField = ""
+    @AppStorage(WatchFieldSelection.key) private var savedField = ""
     @State private var selection: String?
 
     init() {
         // Always start with a selection so the app opens straight into a field's insights.
-        let fields = WatchStore.payload?.snapshot.fields ?? []
-        let saved = UserDefaults.standard.string(forKey: "watch.selectedField")
+        let fields = WatchStore.ordered(WatchStore.payload?.snapshot.fields ?? [])
+        let saved = UserDefaults.standard.string(forKey: WatchFieldSelection.key)
         var initial = fields.first(where: { $0.id == saved })?.id ?? fields.first?.id
         #if DEBUG
         // `-PWWatchScope list|firstField` opens the field list or the first field, for screenshots.
@@ -68,6 +70,10 @@ struct ContentView: View {
             .onChange(of: selection) { _, newValue in
                 if let newValue { savedField = newValue }
             }
+            // The Field Status control opens the app on its field.
+            .onChange(of: savedField) { _, id in
+                if !id.isEmpty, selection != id { selection = id }
+            }
             // Smart Stack widgets open the field they show.
             .onOpenURL { url in
                 guard url.scheme == "pepperwatch", url.host == "field",
@@ -92,20 +98,34 @@ private struct FieldListView: View {
     @Binding var selection: String?
     @Environment(PhoneConnection.self) private var phone
     @State private var locationAccess = LocationAccess()
+    /// The order set by dragging fields in the list (watchOS 27), shared with the widgets.
+    @AppStorage(WatchStore.fieldOrderKey, store: SharedContainer.defaults) private var orderRaw = ""
 
     var body: some View {
+        let fields = WatchStore.ordered(payload.snapshot.fields, order: orderRaw)
         List(selection: $selection) {
-            if payload.snapshot.fields.isEmpty {
+            TipView(ReorderFieldsTip())
+                .listRowBackground(Color.clear)
+            if fields.isEmpty {
                 Text("Create a field in Pepper Watch on your iPhone.")
                     .font(.footnote)
                     .foregroundStyle(.secondary)
             }
-            ForEach(payload.snapshot.fields) { field in
+            // Touch and hold a field, then drag it; the first field is the one the app opens on.
+            ForEach(fields) { field in
                 NavigationLink(value: field.id) {
                     FieldRow(status: field)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 4)
+                        // The card is part of the row, so it moves with the row while dragging;
+                        // reordering doesn't keep list row backgrounds.
+                        .background(FieldCard(severity: field.window().severity))
                 }
-                .listRowBackground(FieldCard(severity: field.window().severity))
             }
+            .reorderable()
+            // Applied to the reorderable rows as a whole; the card inside each row fills it.
+            .listRowBackground(Color.clear)
+            .listRowInsets(EdgeInsets())
 
             Section {
                 if locationAccess.canAsk {
@@ -125,6 +145,21 @@ private struct FieldListView: View {
                 }
             }
         }
+        .reorderContainer(for: WidgetSnapshot.FieldStatus.self) { difference in
+            let destination: String? = switch difference.destination.position {
+            case .before(let id): id
+            case .end: nil
+            }
+            withAnimation(.smooth) {
+                orderRaw = WatchStore.reordering(fields, sources: Array(difference.sources), before: destination)
+            }
+            ReorderFieldsTip().invalidate(reason: .actionPerformed)
+            // Your Fields shows the first three in this order.
+            WidgetCenter.shared.reloadTimelines(ofKind: WatchWidgetKind.yourFields)
+        }
+        // A tap on the wrist when a field lands in its new place.
+        .sensoryFeedback(.impact(weight: .light), trigger: orderRaw)
+        .task(id: fields.count) { ReorderFieldsTip.fieldCount = fields.count }
         .refreshable { await phone.requestUpdate() }
     }
 }
@@ -133,9 +168,13 @@ private struct FieldListView: View {
 /// stays readable on every status. Fields without scans this week get the neutral quaternary fill.
 private struct FieldCard: View {
     let severity: Severity?
+    @Environment(\.isLuminanceReduced) private var isLuminanceReduced
 
     var body: some View {
-        if let severity {
+        if let severity, isLuminanceReduced {
+            // Always On: a deep tint of the status color instead of the bright gradient.
+            RoundedRectangle(cornerRadius: 20).fill(severity.color.mix(with: .black, by: 0.75))
+        } else if let severity {
             RoundedRectangle(cornerRadius: 20).fill(
                 LinearGradient(
                     colors: [severity.color.mix(with: .black, by: 0.25), severity.color.mix(with: .black, by: 0.6)],
@@ -209,7 +248,8 @@ private struct WaitingForPhoneView: View {
                 Image(systemName: "iphone.gen3.radiowaves.left.and.right")
                     .font(.system(size: 36))
                     .foregroundStyle(Color.brand)
-                    .symbolEffect(.pulse, isActive: phone.isRequesting)
+                    // Breathes while asking the iPhone for data (SF Symbols 6).
+                    .symbolEffect(.breathe, isActive: phone.isRequesting)
                 Text("Open Pepper Watch on iPhone")
                     .font(.headline)
                     .multilineTextAlignment(.center)
