@@ -7,6 +7,7 @@
 
 import CoreTransferable
 import Foundation
+import LinkPresentation
 import UIKit
 import UniformTypeIdentifiers
 
@@ -56,6 +57,49 @@ enum SharePresenter {
             }
         }
         presenter.present(controller, animated: true)
+    }
+
+    /// Shares a file with a titled header and icon in the share sheet.
+    static func present(file url: URL, title: String, symbol: String = "tablecells", from sourceRect: CGRect? = nil) {
+        present([SharedFileItem(url: url, title: title, symbol: symbol)], from: sourceRect)
+    }
+}
+
+/// A shared file described for the share sheet (LinkPresentation): its header shows a short title
+/// and icon instead of the generic "Text Document", and Mail gets "Pepper Watch" plus the title.
+nonisolated final class SharedFileItem: NSObject, UIActivityItemSource, Sendable {
+    let url: URL
+    let title: String
+    let symbol: String
+
+    init(url: URL, title: String, symbol: String) {
+        self.url = url
+        self.title = title
+        self.symbol = symbol
+    }
+
+    func activityViewControllerPlaceholderItem(_ activityViewController: UIActivityViewController) -> Any {
+        url
+    }
+
+    func activityViewController(_ activityViewController: UIActivityViewController, itemForActivityType activityType: UIActivity.ActivityType?) -> Any? {
+        url
+    }
+
+    func activityViewController(_ activityViewController: UIActivityViewController, subjectForActivityType activityType: UIActivity.ActivityType?) -> String {
+        "Pepper Watch \(title)"
+    }
+
+    func activityViewControllerLinkMetadata(_ activityViewController: UIActivityViewController) -> LPLinkMetadata? {
+        let metadata = LPLinkMetadata()
+        metadata.title = title
+        metadata.originalURL = url
+        let configuration = UIImage.SymbolConfiguration(pointSize: 44, weight: .semibold)
+        if let icon = UIImage(systemName: symbol, withConfiguration: configuration)?
+            .withTintColor(UIColor(named: "AccentColor") ?? .systemGreen, renderingMode: .alwaysOriginal) {
+            metadata.iconProvider = NSItemProvider(object: icon)
+        }
+        return metadata
     }
 }
 

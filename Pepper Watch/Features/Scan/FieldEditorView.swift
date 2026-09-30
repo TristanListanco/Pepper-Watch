@@ -4,6 +4,7 @@
 //
 
 import CoreLocation
+import CoreLocationUI
 import MapKit
 import SwiftData
 import SwiftUI
@@ -34,6 +35,17 @@ struct FieldEditorView: View {
         !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && center != nil
     }
 
+    /// Anything typed or moved that Cancel or a swipe down would lose. A new field's center and
+    /// place fill in from your location, so only a typed name counts there.
+    private var hasChanges: Bool {
+        guard let field else { return !name.isEmpty }
+        return name != field.name
+            || locationName != field.locationName
+            || radius != field.radiusMeters
+            || center?.latitude != field.latitude
+            || center?.longitude != field.longitude
+    }
+
     var body: some View {
         NavigationStack {
             Form {
@@ -45,6 +57,7 @@ struct FieldEditorView: View {
                     HStack {
                         TextField("Location name", text: $locationName)
                             .focused($focusedField, equals: .locationName)
+                            .submitLabel(.done)
                             .onChange(of: locationName) { _, _ in
                                 if focusedField == .locationName { isLocationNameEdited = true }
                             }
@@ -77,12 +90,21 @@ struct FieldEditorView: View {
                     .frame(height: 280)
                     .listRowInsets(EdgeInsets())
 
-                    Button("Use My Current Location", systemImage: "location.fill") {
-                        if let coordinate = location.lastLocation?.coordinate {
-                            setCenter(coordinate, recenter: true)
+                    // One tap grants location access for this use, even without prior permission.
+                    LocationButton(.currentLocation) {
+                        Task {
+                            await location.refresh(force: true)
+                            if let coordinate = location.lastLocation?.coordinate {
+                                setCenter(coordinate, recenter: true)
+                            }
                         }
                     }
-                    .disabled(location.lastLocation == nil)
+                    .symbolVariant(.fill)
+                    .labelStyle(.titleAndIcon)
+                    .foregroundStyle(.white)
+                    .tint(Color.accentColor)
+                    .clipShape(.capsule)
+                    .frame(maxWidth: .infinity)
 
                     VStack(alignment: .leading, spacing: 6) {
                         LabeledContent("Geofence radius", value: radius.distanceText)
@@ -98,6 +120,8 @@ struct FieldEditorView: View {
                          : "Tap the map to move the center. Scans are verified when you're inside this circle.")
                 }
             }
+            // Dragging the map or scrolling the form puts the keyboard away.
+            .scrollDismissesKeyboard(.interactively)
             .navigationTitle(field == nil ? "New Field" : "Edit Field")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -117,7 +141,8 @@ struct FieldEditorView: View {
                 }
             }
         }
-        .interactiveDismissDisabled(!name.isEmpty)
+        // Swiping down only needs a guard when there's something to lose.
+        .interactiveDismissDisabled(hasChanges)
     }
 
     private func load() {

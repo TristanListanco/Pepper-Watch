@@ -11,15 +11,30 @@ struct SystemLogView: View {
     @Environment(\.modelContext) private var modelContext
     @State private var level: LogLevel?
     @State private var searchText = ""
+    /// Categories picked as search tokens, like "session" or "health".
+    @State private var categoryTokens: [CategoryToken] = []
     @State private var isConfirmingClear = false
+    @State private var isExporting = false
+    @State private var exportFrame: CGRect?
 
     private var filteredLogs: [SystemLog] {
-        logs.filter { log in
+        let categories = Set(categoryTokens.map(\.category))
+        return logs.filter { log in
             (level == nil || log.level == level)
+                && (categories.isEmpty || categories.contains(log.category))
                 && (searchText.isEmpty
                     || log.message.localizedCaseInsensitiveContains(searchText)
                     || log.category.localizedCaseInsensitiveContains(searchText))
         }
+    }
+
+    /// Categories to offer as tokens: those in the log that match what's typed and aren't picked yet.
+    private var suggestedTokens: [CategoryToken] {
+        let picked = Set(categoryTokens.map(\.category))
+        return Set(logs.map(\.category))
+            .filter { !picked.contains($0) && (searchText.isEmpty || $0.localizedCaseInsensitiveContains(searchText)) }
+            .sorted()
+            .map(CategoryToken.init)
     }
 
     var body: some View {
@@ -42,7 +57,16 @@ struct SystemLogView: View {
         }
         .navigationTitle("System Log")
         .navigationBarTitleDisplayMode(.inline)
-        .searchable(text: $searchText, prompt: "Message or category")
+        // Search tokens and suggestions (iOS 16): pick categories, then type to search messages.
+        .searchable(text: $searchText, tokens: $categoryTokens, prompt: "Message or category") { token in
+            Label(token.category.capitalized, systemImage: "tag")
+        }
+        .searchSuggestions {
+            ForEach(suggestedTokens) { token in
+                Label(token.category.capitalized, systemImage: "tag")
+                    .searchCompletion(token)
+            }
+        }
         .overlay {
             if logs.isEmpty {
                 ContentUnavailableView("No Log Entries", systemImage: "list.bullet.rectangle", description: Text("Model loads, scanning sessions, health checks and thermal events are recorded here."))
@@ -52,10 +76,17 @@ struct SystemLogView: View {
         }
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
-                ShareLink(item: CSVExporter.systemLogs(logs), preview: SharePreview("System log CSV")) {
-                    Label("Export", systemImage: "square.and.arrow.up")
+                Button {
+                    export()
+                } label: {
+                    if isExporting {
+                        ProgressView()
+                    } else {
+                        Label("Export", systemImage: "square.and.arrow.up")
+                    }
                 }
-                .disabled(logs.isEmpty)
+                .disabled(logs.isEmpty || isExporting)
+                .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { exportFrame = $0 }
                 Button("Clear", systemImage: "trash", role: .destructive) { isConfirmingClear = true }
                     .disabled(logs.isEmpty)
             }
@@ -67,6 +98,26 @@ struct SystemLogView: View {
             }
         }
     }
+
+    /// Builds the CSV with a spinner in place of the button, then opens the share sheet.
+    private func export() {
+        guard !isExporting else { return }
+        isExporting = true
+        Task {
+            // Let the spinner appear before the rows are read.
+            try? await Task.sleep(for: .milliseconds(120))
+            let url = try? await CSVExporter.systemLogs(logs).writeToTemporaryFile()
+            isExporting = false
+            if let url {
+                SharePresenter.present(file: url, title: "System Log · \(logs.count) entries", symbol: "doc.text", from: exportFrame)
+            }
+        }
+    }
+}
+
+private struct CategoryToken: Identifiable, Hashable {
+    let category: String
+    var id: String { category }
 }
 
 private struct LogRow: View {
@@ -99,6 +150,7 @@ private struct LogRow: View {
                 }
                 Text(log.message)
                     .font(.subheadline)
+                    .textSelection(.enabled)
                 Text(metricsLine)
                     .font(.caption2.monospacedDigit())
                     .foregroundStyle(.tertiary)

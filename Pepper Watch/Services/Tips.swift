@@ -56,6 +56,20 @@ struct PinchGridTip: Tip {
     var image: Image? { Image(systemName: "hand.pinch") }
 }
 
+/// Field cards have no long-press menu, so their swipe actions need a pointer.
+struct FieldSwipeTip: Tip {
+    /// Donated each time the Fields list appears; the tip waits for a second visit.
+    static let fieldsViewed = Tips.Event(id: "fieldsViewed")
+
+    var title: Text { Text("Swipe a field") }
+    var message: Text? { Text("Swipe left to edit or delete a field, or right for walking directions.") }
+    var image: Image? { Image(systemName: "hand.draw") }
+
+    var rules: [Rule] {
+        #Rule(Self.fieldsViewed) { $0.donations.count >= 2 }
+    }
+}
+
 struct VerifyDetectionsTip: Tip {
     var title: Text { Text("Check the model") }
     var message: Text? { Text("Mark each detection as correct or wrong. Insights uses your answers to measure accuracy in the field.") }

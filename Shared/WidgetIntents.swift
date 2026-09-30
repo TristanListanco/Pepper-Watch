@@ -46,6 +46,33 @@ struct CycleFieldIntent: AppIntent {
     }
 }
 
+/// Opens the scanner from Control Center, the Lock Screen or the Action button (iOS 18 controls).
+/// Shared with the widget extension, which shows the control; it runs in the app, which provides
+/// the launcher.
+struct OpenScannerIntent: AppIntent {
+    static let title: LocalizedStringResource = "Scan Leaves"
+    static let description = IntentDescription("Opens the Pepper Watch scanner.")
+    static let supportedModes: IntentModes = .foreground
+    // Siri and Shortcuts already offer Start Scanning, which can also pick a field.
+    static let isDiscoverable = false
+
+    @AppDependency private var launcher: ScannerLauncher
+
+    func perform() async throws -> some IntentResult {
+        await launcher.open()
+        return .result()
+    }
+}
+
+/// How the app opens its scanner, registered with App Intents at launch.
+nonisolated final class ScannerLauncher: Sendable {
+    let open: @MainActor @Sendable () -> Void
+
+    init(open: @escaping @MainActor @Sendable () -> Void) {
+        self.open = open
+    }
+}
+
 extension URL {
     /// `pepperwatch://scan?field=<id>` or `pepperwatch://insights?field=<id>`, handled by the app's navigator.
     static func pepperWatch(_ destination: String, fieldID: String?) -> URL {

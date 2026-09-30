@@ -11,12 +11,15 @@ import CoreSpotlight
 import MapKit
 import SwiftData
 import SwiftUI
+import TipKit
 
 struct FieldsHomeView: View {
     let fields: [Field]
     let onScan: (Field) -> Void
     let onNewField: () -> Void
     let onEdit: (Field) -> Void
+    /// Where the field editor sheet zooms from.
+    let editorTransition: Namespace.ID
 
     @Environment(LocationProvider.self) private var location
     @Environment(GeofenceService.self) private var geofence
@@ -75,6 +78,9 @@ struct FieldsHomeView: View {
                     .font(.title3.weight(.semibold))
                     .padding(.top, 4)
 
+                // Points out the swipe actions once you've come back to the list (TipKit events).
+                TipView(FieldSwipeTip())
+
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 320), spacing: 16)], spacing: 16) {
                     ForEach(sortedFields) { field in
                         Button {
@@ -87,15 +93,27 @@ struct FieldsHomeView: View {
                             )
                         }
                         .buttonStyle(.plain)
+                        // Lifts under the iPad pointer.
+                        .hoverEffect(.lift)
+                        .matchedTransitionSource(id: field.id.uuidString, in: editorTransition)
                         // Swipe a card for quick actions, outside a List (iOS 27).
                         .swipeActions(edge: .trailing) {
-                            Button("Delete", systemImage: "trash", role: .destructive) { pendingDeletion = field }
-                            Button("Edit", systemImage: "pencil") { onEdit(field) }
-                                .tint(.gray)
+                            Button("Delete", systemImage: "trash", role: .destructive) {
+                                FieldSwipeTip().invalidate(reason: .actionPerformed)
+                                pendingDeletion = field
+                            }
+                            Button("Edit", systemImage: "pencil") {
+                                FieldSwipeTip().invalidate(reason: .actionPerformed)
+                                onEdit(field)
+                            }
+                            .tint(.gray)
                         }
                         .swipeActions(edge: .leading) {
-                            Button("Directions", systemImage: "figure.walk") { PlaceNamer.openDirections(to: field.region) }
-                                .tint(.blue)
+                            Button("Directions", systemImage: "figure.walk") {
+                                FieldSwipeTip().invalidate(reason: .actionPerformed)
+                                PlaceNamer.openDirections(to: field.region)
+                            }
+                            .tint(.blue)
                         }
                     }
                 }
@@ -103,14 +121,18 @@ struct FieldsHomeView: View {
             .padding()
         }
         .swipeActionsContainer()
+        .task { await FieldSwipeTip.fieldsViewed.donate() }
         .refreshable { await refresh() }
         // A subtle multicolor wash behind the glass cards, like the Insights summary on iPad.
         .summaryGradientBackground()
         .navigationTitle("Fields")
+        .navigationSubtitle("\(fields.count) \(fields.count == 1 ? "field" : "fields")")
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 Button("New Field", systemImage: "plus", action: onNewField)
+                    .help("New Field (⌘N)")
             }
+            .matchedTransitionSource(id: FieldEditorRoute.new.id, in: editorTransition)
         }
         .confirmationDialog(
             "Delete \(pendingDeletion?.name ?? "field")?",
@@ -135,9 +157,16 @@ struct FieldsHomeView: View {
         let regions = fields.map(\.region)
         VStack(alignment: .leading, spacing: 14) {
             if location.isAccuracyLimited, !location.isDenied {
-                Label("Precise Location is off, so scans can't be verified inside a field.", systemImage: "location.slash")
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
+                VStack(alignment: .leading, spacing: 8) {
+                    Label("Precise Location is off, so scans can't be verified inside a field.", systemImage: "location.slash")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                    Button("Use Precise Location While Scanning", systemImage: "location.fill") {
+                        location.requestPreciseLocation()
+                    }
+                    .font(.footnote.weight(.semibold))
+                    .buttonStyle(.glass)
+                }
             }
             if location.isDenied {
                 Text("Turn on location access to find the field you're standing in and verify scans.")
@@ -149,7 +178,9 @@ struct FieldsHomeView: View {
                 .buttonStyle(.glass)
             } else if location.lastLocation == nil {
                 HStack(spacing: 10) {
-                    ProgressView()
+                    Image(systemName: "location.fill")
+                        .foregroundStyle(.tint)
+                        .symbolEffect(.breathe)
                     Text("Finding your location…")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
@@ -249,12 +280,14 @@ struct FieldActivity {
     var severity: Severity?
 }
 
+/// Your fields at a glance: a still map framing every field and where you are.
 struct FieldsOverviewMap: View {
     let fields: [Field]
     var activity: [UUID: FieldActivity] = [:]
 
     var body: some View {
-        Map(initialPosition: .automatic) {
+        // Not movable, so the card scrolls with the page instead of panning the map.
+        Map(initialPosition: .automatic, interactionModes: []) {
             UserAnnotation()
             ForEach(fields) { field in
                 let center = CLLocationCoordinate2D(latitude: field.latitude, longitude: field.longitude)
@@ -272,10 +305,6 @@ struct FieldsOverviewMap: View {
             }
         }
         .mapStyle(.hybrid)
-        .mapControls {
-            MapUserLocationButton()
-            MapCompass()
-        }
     }
 }
 

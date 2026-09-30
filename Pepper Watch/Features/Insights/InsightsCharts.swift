@@ -154,11 +154,14 @@ extension Calendar.Component {
 struct FieldRatesChart: View {
     let fields: [InsightsStats.FieldRate]
     var color: Color = .teal
+    /// Touching a bar keeps it bright and dims the others.
+    @State private var selectedField: String?
 
     var body: some View {
         Chart(fields) { field in
             BarMark(x: .value("Infested", field.rate), y: .value("Field", field.field))
                 .foregroundStyle(color)
+                .opacity(selectedField == nil || selectedField == field.field ? 1 : 0.35)
                 .cornerRadius(4)
                 .annotation(position: .trailing, spacing: 6) {
                     Text("\(field.rate.percentText) · \(field.total) leaves")
@@ -168,6 +171,8 @@ struct FieldRatesChart: View {
         }
         .chartXScale(domain: 0...1.35)
         .chartXAxis(.hidden)
+        .chartYSelection(value: $selectedField)
+        .animation(.smooth(duration: 0.2), value: selectedField)
         .frame(height: CGFloat(max(fields.count, 1)) * 44 + 12)
     }
 }
@@ -177,14 +182,34 @@ struct FieldRatesChart: View {
 struct ConfidenceHistogramChart: View {
     let bins: [InsightsStats.ConfidenceBin]
     var height: CGFloat = 220
+    @State private var selectedBin: String?
 
     var body: some View {
-        Chart(bins) { bin in
-            BarMark(x: .value("Confidence", bin.label), y: .value("Detections", bin.count))
-                .foregroundStyle(by: .value("Class", bin.leafClass.displayName))
-                .position(by: .value("Class", bin.leafClass.displayName))
-                .cornerRadius(3)
+        Chart {
+            ForEach(bins) { bin in
+                BarMark(x: .value("Confidence", bin.label), y: .value("Detections", bin.count))
+                    .foregroundStyle(by: .value("Class", bin.leafClass.displayName))
+                    .position(by: .value("Class", bin.leafClass.displayName))
+                    .cornerRadius(3)
+            }
+            // Touch a bin for its counts by class.
+            if let selectedBin {
+                let binCounts = bins.filter { $0.label == selectedBin }
+                RuleMark(x: .value("Confidence", selectedBin))
+                    .foregroundStyle(.secondary.opacity(0.15))
+                    .lineStyle(StrokeStyle(lineWidth: 28))
+                    .annotation(position: .top, overflowResolution: .init(x: .fit(to: .chart), y: .disabled)) {
+                        ChartTooltip {
+                            Text("Confidence \(selectedBin)")
+                                .foregroundStyle(.secondary)
+                            ForEach(binCounts) { item in
+                                Label("\(item.leafClass.displayName): \(item.count)", systemImage: item.leafClass.symbol)
+                            }
+                        }
+                    }
+            }
         }
+        .chartXSelection(value: $selectedBin)
         .leafClassColorScale()
         .chartLegend(position: .top, alignment: .leading)
         .chartXAxis {
