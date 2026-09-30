@@ -27,7 +27,6 @@ struct DeveloperView: View {
     @AppStorage(SettingsKey.fpsTarget) private var fpsTarget = 17.0
     @AppStorage(SettingsKey.autoLogRequiresAphids) private var autoLogRequiresAphids = false
     @AppStorage(SettingsKey.geotagEnabled) private var geotagEnabled = true
-    @AppStorage(SettingsKey.healthLogInterval) private var healthLogInterval = 30.0
     @AppStorage(SettingsKey.strictGeofence) private var strictGeofence = false
     @State private var showsWidgetGallery = Self.opensPage("widgets")
     @State private var showsModelCard = Self.opensPage("model")
@@ -193,12 +192,6 @@ struct DeveloperView: View {
             }
             Toggle("Geotag detections", isOn: $geotagEnabled)
             Toggle("Strict geofence", isOn: $strictGeofence)
-            Picker("Health log interval", selection: $healthLogInterval) {
-                Text("15 s").tag(15.0)
-                Text("30 s").tag(30.0)
-                Text("1 min").tag(60.0)
-                Text("5 min").tag(300.0)
-            }
         } header: {
             Text("Logging")
         }
@@ -210,11 +203,6 @@ struct DeveloperView: View {
                 SystemLogView()
             } label: {
                 Label("System Log", systemImage: "list.bullet.rectangle")
-            }
-            NavigationLink {
-                WidgetGalleryView()
-            } label: {
-                Label("Widgets", systemImage: "square.grid.2x2")
             }
             Button("Show Tips Again", systemImage: "lightbulb") {
                 PepperWatchTips.resetOnNextLaunch()
@@ -249,7 +237,6 @@ struct DeveloperView: View {
             }
             .padding(.vertical, 4)
             LabeledContent("Version", value: Bundle.main.appVersion)
-            LabeledContent("Classes", value: LeafClass.allCases.map(\.rawValue).joined(separator: ", "))
             LabeledContent("Network use", value: "None, fully offline")
         }
     }
@@ -365,15 +352,11 @@ private struct DataManagementSection: View {
     @Environment(\.systemLogger) private var logger
     @State private var isConfirmingErase = false
     @State private var storageBytes: Int64?
-    /// The export being prepared; its row shows a spinner until the share sheet opens.
-    @State private var preparing: ExportKind?
+    /// The sessions export is being prepared; its row shows a spinner until the share sheet opens.
+    @State private var isExporting = false
     @State private var exportError: String?
-    /// Where each export row is on screen, for the share sheet's popover on iPad.
-    @State private var rowFrames: [ExportKind: CGRect] = [:]
-
-    private enum ExportKind: Hashable {
-        case detections, sessions, systemLog
-    }
+    /// Where the export row is on screen, for the share sheet's popover on iPad.
+    @State private var exportFrame: CGRect?
 
     var body: some View {
         Section {
@@ -384,9 +367,8 @@ private struct DataManagementSection: View {
             LabeledContent("System log entries", value: logs.count.formatted())
             LabeledContent("Storage used", value: storageBytes.map { $0.formatted(.byteCount(style: .file)) } ?? "…")
 
-            exportButton(.detections, title: "Export Detections (CSV)", systemImage: "tablecells", isEmpty: events.isEmpty)
-            exportButton(.sessions, title: "Export Sessions (CSV)", systemImage: "timer", isEmpty: sessions.isEmpty)
-            exportButton(.systemLog, title: "Export System Log (CSV)", systemImage: "doc.text", isEmpty: logs.isEmpty)
+            // Detections export from Insights, and the log from the System Log page.
+            exportSessionsButton
 
             Button("Generate Demo Data", systemImage: "wand.and.stars") {
                 DemoDataGenerator.generate(in: modelContext)
@@ -421,58 +403,37 @@ private struct DataManagementSection: View {
         }
     }
 
-    private func exportButton(_ kind: ExportKind, title: String, systemImage: String, isEmpty: Bool) -> some View {
+    private var exportSessionsButton: some View {
         Button {
-            export(kind)
+            exportSessions()
         } label: {
             HStack {
-                Label(title, systemImage: systemImage)
+                Label("Export Sessions (CSV)", systemImage: "timer")
                 Spacer()
-                if preparing == kind {
+                if isExporting {
                     ProgressView()
                 }
             }
             .contentShape(.rect)
         }
-        .disabled(isEmpty || preparing != nil)
-        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { rowFrames[kind] = $0 }
-        .accessibilityValue(preparing == kind ? "Preparing" : "")
-    }
-
-    private func title(for kind: ExportKind) -> String {
-        switch kind {
-        case .detections: "Detections · \(events.count) scans"
-        case .sessions: "Sessions · \(sessions.count) sessions"
-        case .systemLog: "System Log · \(logs.count) entries"
-        }
-    }
-
-    private func symbol(for kind: ExportKind) -> String {
-        switch kind {
-        case .detections: "tablecells"
-        case .sessions: "timer"
-        case .systemLog: "doc.text"
-        }
+        .disabled(sessions.isEmpty || isExporting)
+        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { exportFrame = $0 }
+        .accessibilityValue(isExporting ? "Preparing" : "")
     }
 
     /// Builds the CSV, writes it to a file and opens the share sheet, with a spinner meanwhile.
-    private func export(_ kind: ExportKind) {
-        guard preparing == nil else { return }
-        preparing = kind
+    private func exportSessions() {
+        guard !isExporting else { return }
+        isExporting = true
         Task {
             // Let the spinner appear before the rows are read.
             try? await Task.sleep(for: .milliseconds(120))
-            let document = switch kind {
-            case .detections: CSVExporter.detections(events)
-            case .sessions: CSVExporter.sessions(sessions)
-            case .systemLog: CSVExporter.systemLogs(logs)
-            }
             do {
-                let url = try await document.writeToTemporaryFile()
-                preparing = nil
-                SharePresenter.present(file: url, title: title(for: kind), symbol: symbol(for: kind), from: rowFrames[kind])
+                let url = try await CSVExporter.sessions(sessions).writeToTemporaryFile()
+                isExporting = false
+                SharePresenter.present(file: url, title: "Sessions · \(sessions.count) sessions", symbol: "timer", from: exportFrame)
             } catch {
-                preparing = nil
+                isExporting = false
                 exportError = error.localizedDescription
                 logger?.log(.error, category: "data", "Export failed: \(error.localizedDescription)")
             }
