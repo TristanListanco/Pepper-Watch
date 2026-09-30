@@ -54,7 +54,12 @@ struct ContentView: View {
                 FieldListView(payload: payload, selection: $selection)
             } detail: {
                 if let status = payload.snapshot.fields.first(where: { $0.id == selection }) {
-                    InsightsPager(status: status, highlight: payload.highlights[status.id])
+                    InsightsPager(
+                        status: status,
+                        highlight: payload.highlights[status.id],
+                        validation: payload.validation?[status.id],
+                        trends: payload.trends?[status.id]
+                    )
                         // Start at the summary whenever the field changes.
                         .id(status.id)
                 } else {
@@ -63,7 +68,6 @@ struct ContentView: View {
                     } description: {
                         Text("Create a field in Pepper Watch on your iPhone.")
                     }
-                    .containerBackground(Color.brand.gradient, for: .navigation)
                 }
             }
             .onChange(of: selection) { _, newValue in
@@ -86,7 +90,8 @@ struct ContentView: View {
 
 // MARK: - Field list
 
-/// The source list: no title, so the shorter bar leaves more room for comparing fields.
+/// The source list on plain black: each field is a card in its status color, with no title or
+/// toolbar so the cards get the room. Pull down to sync with iPhone.
 private struct FieldListView: View {
     let payload: WatchPayload
     @Binding var selection: String?
@@ -104,6 +109,7 @@ private struct FieldListView: View {
                 NavigationLink(value: field.id) {
                     FieldRow(status: field)
                 }
+                .listRowBackground(FieldCard(severity: field.window().severity))
             }
 
             Section {
@@ -111,72 +117,89 @@ private struct FieldListView: View {
                     Button("Show at My Fields", systemImage: "location.fill") {
                         locationAccess.request()
                     }
+                    .foregroundStyle(.primary)
                 }
             } footer: {
                 VStack(alignment: .leading, spacing: 4) {
                     if locationAccess.canAsk {
                         Text("Lets the Smart Stack show a field when you arrive at it.")
+                            .foregroundStyle(.secondary)
                     }
                     Text("Synced \(payload.snapshot.generatedAt, format: .relative(presentation: .named))")
+                        .foregroundStyle(.tertiary)
                 }
             }
         }
-        .containerBackground(Color.brand.gradient, for: .navigation)
         .refreshable { await phone.requestUpdate() }
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button("Sync with iPhone", systemImage: "arrow.triangle.2.circlepath") {
-                    Task { await phone.requestUpdate() }
-                }
-                .symbolEffect(.rotate, isActive: phone.isRequesting)
-                .tint(Color.brand)
-                .disabled(phone.isRequesting)
-            }
+    }
+}
+
+/// A field card in a rich gradient of its status color, darkened toward the bottom so white text
+/// stays readable on every status. Fields without scans this week get the neutral quaternary fill.
+private struct FieldCard: View {
+    let severity: Severity?
+
+    var body: some View {
+        if let severity {
+            RoundedRectangle(cornerRadius: 20).fill(
+                LinearGradient(
+                    colors: [severity.color.mix(with: .black, by: 0.25), severity.color.mix(with: .black, by: 0.6)],
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+        } else {
+            RoundedRectangle(cornerRadius: 20).fill(.quaternary)
         }
     }
 }
 
-/// Name, severity and last scan on the left; the infestation ring on the right for comparing fields at a glance.
+/// The field's name, its infested share below, and how long since it was scanned in the corner.
 private struct FieldRow: View {
     let status: WidgetSnapshot.FieldStatus
 
     var body: some View {
         let window = status.window()
-        HStack(spacing: 10) {
-            VStack(alignment: .leading, spacing: 2) {
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(alignment: .firstTextBaseline) {
                 Text(status.name)
                     .font(.headline)
+                    .foregroundStyle(.primary)
                     .lineLimit(1)
-                if let severity = window.severity {
-                    Label {
-                        Text(severity.title)
-                    } icon: {
-                        Image(systemName: severity.symbol)
-                            .foregroundStyle(severity.color)
-                    }
-                    .font(.caption2.weight(.semibold))
-                } else {
-                    Text("No scans this week")
-                        .font(.caption2)
-                        .foregroundStyle(.secondary)
-                }
+                Spacer(minLength: 4)
                 if let latest = status.latestScan {
-                    Text(latest, format: .relative(presentation: .numeric, unitsStyle: .abbreviated))
-                        .font(.caption2)
+                    Text(compactAge(since: latest))
+                        .font(.footnote.monospacedDigit())
                         .foregroundStyle(.secondary)
                 }
             }
-            Spacer(minLength: 4)
-            ZStack {
-                InfestationRing(progress: window.infestationRate, animatesIn: false)
-                Text(window.totalLeaves == 0 ? "—" : "\(Int((window.infestationRate * 100).rounded()))")
-                    .font(.system(.footnote, design: .rounded).weight(.semibold))
-            }
-            .frame(width: 42, height: 42)
+            Text(window.totalLeaves == 0 ? "—" : window.infestationRate.percentText)
+                .font(.system(.title, design: .rounded).weight(.semibold))
+                .foregroundStyle(window.totalLeaves == 0 ? .secondary : .primary)
         }
-        .padding(.vertical, 4)
+        .padding(.vertical, 6)
+        // The status is carried by the card color, so spell it out for VoiceOver.
         .accessibilityElement(children: .combine)
-        .accessibilityValue(window.totalLeaves == 0 ? "No scans this week" : "\(window.infestationRate.percentText) infested")
+        .accessibilityValue(accessibilitySummary(window))
+    }
+
+    private func accessibilitySummary(_ window: WidgetSnapshot.WindowSummary) -> String {
+        var parts = [window.totalLeaves == 0 ? "No scans this week" : "\(window.infestationRate.percentText) infested"]
+        if let severity = window.severity { parts.append(severity.title) }
+        if let latest = status.latestScan { parts.append("scanned \(latest.formatted(.relative(presentation: .named)))") }
+        return parts.joined(separator: ", ")
+    }
+}
+
+/// "now", "5m", "17h", "4d", "3w": short enough for a card corner, without "ago".
+private func compactAge(since date: Date, now: Date = .now) -> String {
+    let seconds = max(0, now.timeIntervalSince(date))
+    switch seconds {
+    case ..<60: return "now"
+    case ..<3600: return "\(Int(seconds / 60))m"
+    case ..<86_400: return "\(Int(seconds / 3600))h"
+    case ..<(7 * 86_400): return "\(Int(seconds / 86_400))d"
+    default: return "\(Int(seconds / (7 * 86_400)))w"
     }
 }
 
@@ -208,7 +231,6 @@ private struct WaitingForPhoneView: View {
             }
             .scenePadding(.horizontal)
         }
-        .containerBackground(Color.brand.gradient, for: .navigation)
     }
 }
 

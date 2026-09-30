@@ -10,11 +10,13 @@ extension Color {
     static let aphid = Color(red: 0.922, green: 0.408, blue: 0.204)    // #EB6834
     static let healthy = Color(red: 0.106, green: 0.686, blue: 0.478)  // #1BAF7A
     static let brand = Color(red: 0.302, green: 0.729, blue: 0.353)    // #4DBA5A
+    /// Warm amber for highlights: insight, not alarm, and it sits well beside the orange pages.
+    static let insight = Color(red: 0.925, green: 0.651, blue: 0.227)  // #ECA63A
 }
 
 /// One page of the Digital Crown pager, in scroll order.
 enum InsightPage: Hashable {
-    case summary, highlights, infestation, leafHealth, scans, location
+    case summary, highlights, infestation, leafHealth, scans, accuracy, location
 
     var title: String {
         switch self {
@@ -23,6 +25,7 @@ enum InsightPage: Hashable {
         case .infestation: "Infestation Rate"
         case .leafHealth: "Leaf Health"
         case .scans: "Scans"
+        case .accuracy: "Detection Accuracy"
         case .location: "Location"
         }
     }
@@ -34,6 +37,7 @@ enum InsightPage: Hashable {
         case .infestation: "ant.fill"
         case .leafHealth: "leaf.fill"
         case .scans: "camera.viewfinder"
+        case .accuracy: "checkmark.seal.fill"
         case .location: "mappin.and.ellipse"
         }
     }
@@ -42,10 +46,11 @@ enum InsightPage: Hashable {
     var tint: Color {
         switch self {
         case .summary: .brand
-        case .highlights: .purple
+        case .highlights: .insight
         case .infestation: .aphid
         case .leafHealth: .healthy
         case .scans: .brand
+        case .accuracy: .blue
         case .location: .teal
         }
     }

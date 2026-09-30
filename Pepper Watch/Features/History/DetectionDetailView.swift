@@ -73,9 +73,11 @@ struct DetectionDetailView: View {
                         .disabled(true)
                 }
             }
+            .visibilityPriority(.high)
             ToolbarItem(placement: .primaryAction) {
                 Button("Delete", systemImage: "trash", role: .destructive) { isConfirmingDelete = true }
             }
+            .visibilityPriority(.low)
         }
         .confirmationDialog("Delete this scan?", isPresented: $isConfirmingDelete, titleVisibility: .visible) {
             Button("Delete Scan", role: .destructive) {

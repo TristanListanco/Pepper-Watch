@@ -23,6 +23,7 @@ struct FieldWidgetView: View {
             } else {
                 Label("Open Pepper Watch", systemImage: "leaf.fill")
                     .font(.footnote)
+                    .foregroundStyle(.secondary)
             }
         }
         .containerBackground(tint.gradient.opacity(0.6), for: .widget)
@@ -82,8 +83,10 @@ struct FieldWidgetView: View {
                         VStack(spacing: 0) {
                             Image(systemName: reading.symbol)
                                 .font(.caption2)
+                                .foregroundStyle(.secondary)
                             Text(reading.value)
                                 .font(.system(.title3, design: .rounded).weight(.semibold))
+                                .foregroundStyle(.primary)
                         }
                     }
                 }
@@ -106,6 +109,7 @@ struct FieldWidgetView: View {
         case .accessoryInline:
             Label {
                 Text(stats.hasLeaves || entry.metric == .scans ? "\(status.name) \(reading.value) \(reading.unit)" : "\(status.name): no scans")
+                    .foregroundStyle(.primary)
             } icon: {
                 Image(systemName: reading.symbol)
             }
@@ -119,7 +123,9 @@ struct FieldWidgetView: View {
         VStack(alignment: .leading, spacing: 1) {
             HStack(spacing: 4) {
                 Image(systemName: reading.symbol)
+                    .foregroundStyle(.secondary)
                 Text(status.name)
+                    .foregroundStyle(.primary)
                     .lineLimit(1)
                 Spacer(minLength: 4)
                 if let severity = stats.current.severity {
@@ -130,10 +136,24 @@ struct FieldWidgetView: View {
             .font(.headline)
             .widgetAccentable()
 
-            Text(stats.hasLeaves || entry.metric == .scans ? "\(reading.value) \(reading.unit)" : "No scans this week")
-                .font(.system(.title3, design: .rounded).weight(.semibold))
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
+            Group {
+                if stats.hasLeaves || entry.metric == .scans {
+                    HStack(alignment: .firstTextBaseline, spacing: 3) {
+                        Text(reading.value)
+                            .font(.system(.title3, design: .rounded).weight(.semibold))
+                            .foregroundStyle(.primary)
+                        Text(reading.unit)
+                            .font(.footnote.weight(.medium))
+                            .foregroundStyle(.secondary)
+                    }
+                } else {
+                    Text("No scans this week")
+                        .font(.system(.title3, design: .rounded).weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
 
             Group {
                 if let headline = entry.headline {
@@ -143,7 +163,7 @@ struct FieldWidgetView: View {
                 }
             }
             .font(.caption2)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(.tertiary)
             .lineLimit(1)
         }
         .frame(maxWidth: .infinity, alignment: .leading)

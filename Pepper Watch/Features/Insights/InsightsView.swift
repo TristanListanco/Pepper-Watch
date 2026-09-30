@@ -178,12 +178,15 @@ struct InsightsView: View {
                         Label("Field", systemImage: selectedField == nil ? "line.3.horizontal.decrease" : "line.3.horizontal.decrease.circle.fill")
                     }
                 }
+                // When space runs short the field filter stays and export moves to the overflow menu.
+                .visibilityPriority(.high)
                 if !scopedEvents.isEmpty {
                     ToolbarItem(placement: .primaryAction) {
                         ShareLink(item: CSVExporter.detections(scopedEvents), preview: SharePreview("Pepper Watch detections")) {
                             Label("Export CSV", systemImage: "square.and.arrow.up")
                         }
                     }
+                    .visibilityPriority(.low)
                 }
             }
         }
@@ -231,7 +234,7 @@ struct InsightsView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .background(.card, in: .rect(cornerRadius: 20))
                 } else {
-                    metricGrid(pinned, current: current)
+                    metricGrid(pinned, current: current, reorderable: true)
                 }
 
                 if !others.isEmpty {
@@ -254,7 +257,7 @@ struct InsightsView: View {
                     if showAllMetrics {
                         SectionHeader(title: "More Metrics")
                             .padding(.top, 8)
-                        metricGrid(others, current: current)
+                        metricGrid(others, current: current, reorderable: false)
                             .transition(.opacity.combined(with: .move(edge: .top)))
                     }
                 }
@@ -272,19 +275,35 @@ struct InsightsView: View {
     }
 
     /// One column on iPhone, two or more on iPad depending on the available width.
-    private func metricGrid(_ metrics: [InsightMetric], current: InsightsStats) -> some View {
-        LazyVGrid(columns: [GridItem(.adaptive(minimum: 320, maximum: 640), spacing: 12)], spacing: 12) {
-            ForEach(metrics) { metric in
-                let isPinned = PinnedMetrics.decode(pinnedRaw).contains(metric)
-                NavigationLink(value: metric) {
-                    InsightSummaryCard(metric: metric, current: current)
-                }
-                .buttonStyle(.plain)
-                .contextMenu {
-                    Button(isPinned ? "Unpin" : "Pin", systemImage: isPinned ? "pin.slash" : "pin") {
-                        withAnimation(.smooth) { pinnedRaw = PinnedMetrics.toggling(metric, in: pinnedRaw) }
-                    }
-                }
+    /// Pinned metrics can be dragged into a new order right in the grid (iOS 27).
+    @ViewBuilder
+    private func metricGrid(_ metrics: [InsightMetric], current: InsightsStats, reorderable: Bool) -> some View {
+        let grid = LazyVGrid(columns: [GridItem(.adaptive(minimum: 320, maximum: 640), spacing: 12)], spacing: 12) {
+            if reorderable {
+                ForEach(metrics) { metricCard($0, current: current) }
+                    .reorderable()
+            } else {
+                ForEach(metrics) { metricCard($0, current: current) }
+            }
+        }
+        if reorderable {
+            grid.reorderContainer(for: InsightMetric.self) { difference in
+                withAnimation(.smooth) { pinnedRaw = PinnedMetrics.applying(difference, to: pinnedRaw) }
+            }
+        } else {
+            grid
+        }
+    }
+
+    private func metricCard(_ metric: InsightMetric, current: InsightsStats) -> some View {
+        let isPinned = PinnedMetrics.decode(pinnedRaw).contains(metric)
+        return NavigationLink(value: metric) {
+            InsightSummaryCard(metric: metric, current: current)
+        }
+        .buttonStyle(.plain)
+        .contextMenu {
+            Button(isPinned ? "Unpin" : "Pin", systemImage: isPinned ? "pin.slash" : "pin") {
+                withAnimation(.smooth) { pinnedRaw = PinnedMetrics.toggling(metric, in: pinnedRaw) }
             }
         }
     }
@@ -304,6 +323,20 @@ enum PinnedMetrics {
 
     static func encode(_ metrics: [InsightMetric]) -> String {
         metrics.map(\.rawValue).joined(separator: ",")
+    }
+
+    /// Moves the dragged metrics to where they were dropped.
+    static func applying(_ difference: ReorderDifference<InsightMetric.ID, ReorderableSingleCollectionIdentifier>, to raw: String) -> String {
+        var metrics = decode(raw)
+        let moving = metrics.filter { difference.sources.contains($0.id) }
+        metrics.removeAll { difference.sources.contains($0.id) }
+        switch difference.destination.position {
+        case .before(let id):
+            metrics.insert(contentsOf: moving, at: metrics.firstIndex { $0.id == id } ?? metrics.endIndex)
+        case .end:
+            metrics.append(contentsOf: moving)
+        }
+        return encode(metrics)
     }
 
     static func toggling(_ metric: InsightMetric, in raw: String) -> String {

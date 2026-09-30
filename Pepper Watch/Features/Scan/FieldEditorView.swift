@@ -158,7 +158,7 @@ struct FieldEditorView: View {
         let trimmedPlace = locationName.trimmingCharacters(in: .whitespacesAndNewlines)
         let saved: Field
         if let field {
-            field.name = trimmedName
+            field.rename(to: trimmedName)
             field.locationName = trimmedPlace
             field.latitude = center.latitude
             field.longitude = center.longitude
