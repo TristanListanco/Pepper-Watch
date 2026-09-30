@@ -390,8 +390,8 @@
 				DEVELOPMENT_TEAM = NSA2PC5U28;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = "Pepper Watch";
 				INFOPLIST_FILE = "PepperWatchWatchApp-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "Pepper Watch";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Pepper Watch uses your location so the Smart Stack can show a field's status when you arrive at it.";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
 				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = "com.tristanlistanco.Pepper-Watch";
@@ -426,8 +426,8 @@
 				DEVELOPMENT_TEAM = NSA2PC5U28;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
-				INFOPLIST_KEY_CFBundleDisplayName = "Pepper Watch";
 				INFOPLIST_FILE = "PepperWatchWatchApp-Info.plist";
+				INFOPLIST_KEY_CFBundleDisplayName = "Pepper Watch";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Pepper Watch uses your location so the Smart Stack can show a field's status when you arrive at it.";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
 				INFOPLIST_KEY_WKCompanionAppBundleIdentifier = "com.tristanlistanco.Pepper-Watch";
