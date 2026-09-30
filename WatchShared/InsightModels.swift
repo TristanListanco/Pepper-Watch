@@ -10,22 +10,18 @@ extension Color {
     static let aphid = Color(red: 0.922, green: 0.408, blue: 0.204)    // #EB6834
     static let healthy = Color(red: 0.106, green: 0.686, blue: 0.478)  // #1BAF7A
     static let brand = Color(red: 0.302, green: 0.729, blue: 0.353)    // #4DBA5A
-    /// Warm amber for highlights: insight, not alarm, and it sits well beside the orange pages.
-    static let insight = Color(red: 0.925, green: 0.651, blue: 0.227)  // #ECA63A
 }
 
 /// One page of the Digital Crown pager, in scroll order.
 enum InsightPage: Hashable {
-    case summary, highlights, infestation, leafHealth, scans, accuracy, location
+    case summary, infestation, leafHealth, scans, location
 
     var title: String {
         switch self {
         case .summary: "Summary"
-        case .highlights: "Highlights"
         case .infestation: "Infestation Rate"
         case .leafHealth: "Leaf Health"
         case .scans: "Scans"
-        case .accuracy: "Detection Accuracy"
         case .location: "Location"
         }
     }
@@ -33,11 +29,9 @@ enum InsightPage: Hashable {
     var symbol: String {
         switch self {
         case .summary: "leaf.fill"
-        case .highlights: "sparkles"
         case .infestation: "ant.fill"
         case .leafHealth: "leaf.fill"
         case .scans: "camera.viewfinder"
-        case .accuracy: "checkmark.seal.fill"
         case .location: "mappin.and.ellipse"
         }
     }
@@ -46,11 +40,9 @@ enum InsightPage: Hashable {
     var tint: Color {
         switch self {
         case .summary: .brand
-        case .highlights: .insight
         case .infestation: .aphid
         case .leafHealth: .healthy
         case .scans: .brand
-        case .accuracy: .blue
         case .location: .teal
         }
     }
@@ -91,24 +83,6 @@ nonisolated struct ScopeStats {
     var change: Double? {
         guard current.totalLeaves > 0, previous.totalLeaves > 0 else { return nil }
         return (current.infestationRate - previous.infestationRate) * 100
-    }
-
-    /// Numbers-only briefing for Apple Intelligence. Also tells whether a saved brief still matches the data.
-    func facts(for status: WidgetSnapshot.FieldStatus) -> String {
-        var lines = ["Field: \(status.name)\(status.locationName.isEmpty ? "" : ", \(status.locationName)"), last 7 days."]
-        if hasLeaves {
-            lines.append("Leaves: \(current.totalLeaves) detected, \(current.aphidLeaves) aphid-infested (\(current.infestationRate.percentText)). Severity: \(current.severity?.title.lowercased() ?? "none").")
-        } else {
-            lines.append("No leaves detected.")
-        }
-        if previous.totalLeaves > 0 {
-            lines.append("Previous 7 days infestation: \(previous.infestationRate.percentText).")
-        }
-        lines.append("Scans: \(current.scans).")
-        if let latest = status.latestScan {
-            lines.append("Last scan: \(latest.formatted(.dateTime.month(.abbreviated).day().hour())).")
-        }
-        return lines.joined(separator: "\n")
     }
 }
 

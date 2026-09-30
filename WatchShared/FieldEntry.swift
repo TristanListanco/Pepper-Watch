@@ -10,7 +10,7 @@ nonisolated struct FieldEntry: TimelineEntry, RelevanceEntry {
     let date: Date
     let status: WidgetSnapshot.FieldStatus?
     let metric: WidgetMetric
-    /// Apple Intelligence headline: the watch brief when current, otherwise the iPhone's summary.
+    /// The iPhone's Apple Intelligence headline for the field.
     let headline: String?
     let score: Float
 
@@ -32,7 +32,6 @@ nonisolated struct FieldEntry: TimelineEntry, RelevanceEntry {
             return FieldEntry(date: now, status: nil, metric: metric, headline: nil, score: 0)
         }
         let stats = ScopeStats(status, now: now)
-        let brief = WatchStore.brief(for: status.id, facts: stats.facts(for: status))
         let score: Float = switch stats.current.severity {
         case .severe?: 1
         case .moderate?: 0.7
@@ -44,7 +43,7 @@ nonisolated struct FieldEntry: TimelineEntry, RelevanceEntry {
             date: now,
             status: status,
             metric: metric,
-            headline: brief?.headline ?? payload.highlights[status.id]?.headline,
+            headline: payload.highlights[status.id]?.headline,
             score: score
         )
     }

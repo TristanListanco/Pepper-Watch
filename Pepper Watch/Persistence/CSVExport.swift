@@ -7,6 +7,7 @@
 
 import CoreTransferable
 import Foundation
+import UIKit
 import UniformTypeIdentifiers
 
 nonisolated struct CSVDocument: Transferable, Sendable {
@@ -18,6 +19,43 @@ nonisolated struct CSVDocument: Transferable, Sendable {
             Data(document.text.utf8)
         }
         .suggestedFileName { $0.filename }
+    }
+
+    /// Writes the CSV to a fresh temporary file named for sharing, off the main thread.
+    @concurrent func writeToTemporaryFile() async throws -> URL {
+        let directory = FileManager.default.temporaryDirectory.appending(path: "Exports", directoryHint: .isDirectory)
+        // Only the latest export is kept around.
+        try? FileManager.default.removeItem(at: directory)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let url = directory.appending(path: filename)
+        try Data(text.utf8).write(to: url, options: .atomic)
+        return url
+    }
+}
+
+/// Presents the system share sheet from the frontmost view controller. On iPad it points at
+/// `sourceRect`, in window coordinates.
+enum SharePresenter {
+    static func present(_ items: [Any], from sourceRect: CGRect? = nil) {
+        guard let window = UIApplication.shared.connectedScenes
+            .compactMap({ $0 as? UIWindowScene })
+            .first(where: { $0.activationState == .foregroundActive })?
+            .keyWindow,
+            var presenter = window.rootViewController
+        else { return }
+        while let presented = presenter.presentedViewController { presenter = presented }
+
+        let controller = UIActivityViewController(activityItems: items, applicationActivities: nil)
+        if let popover = controller.popoverPresentationController {
+            popover.sourceView = presenter.view
+            if let sourceRect {
+                popover.sourceRect = presenter.view.convert(sourceRect, from: nil)
+            } else {
+                popover.sourceRect = CGRect(x: presenter.view.bounds.midX, y: presenter.view.bounds.midY, width: 0, height: 0)
+                popover.permittedArrowDirections = []
+            }
+        }
+        presenter.present(controller, animated: true)
     }
 }
 

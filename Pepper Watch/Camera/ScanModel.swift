@@ -69,6 +69,10 @@ final class ScanModel {
     @ObservationIgnored private var latestFrame: FrameResult?
     @ObservationIgnored private var lastFrameAt: ContinuousClock.Instant?
     @ObservationIgnored private var lastAutoLogAt = Date.distantPast
+    /// Auto-log waits for the view to hold steady and skips views it already saved.
+    @ObservationIgnored private var lastAutoLogged: [Detection] = []
+    @ObservationIgnored private var steadySummary: DetectionSummary?
+    @ObservationIgnored private var steadyFrames = 0
     @ObservationIgnored private var lastHealthLogAt = Date.distantPast
     @ObservationIgnored private var severityCandidate: Severity?
     @ObservationIgnored private var severityCandidateFrames = 0
@@ -325,12 +329,39 @@ final class ScanModel {
         }
     }
 
+    /// Frames the leaf counts must hold for before auto-log saves one: about half a second.
+    private static let steadyFramesNeeded = 8
+
+    /// Saves a frame at most once per interval, only after the camera has settled on the same
+    /// leaves, and never the same view twice in a row, so holding still on one plant saves one photo.
     private func autoLogIfNeeded(_ frame: FrameResult) {
-        guard AppSettings.autoLogEnabled, !frame.detections.isEmpty, !isLoggingBlockedByGeofence else { return }
+        guard AppSettings.autoLogEnabled, !frame.detections.isEmpty, !isLoggingBlockedByGeofence else {
+            steadyFrames = 0
+            return
+        }
         if AppSettings.autoLogRequiresAphids, summary.aphidCount == 0 { return }
-        guard Date.now.timeIntervalSince(lastAutoLogAt) >= AppSettings.autoLogInterval else { return }
+        if summary == steadySummary {
+            steadyFrames += 1
+        } else {
+            steadySummary = summary
+            steadyFrames = 1
+        }
+        guard steadyFrames >= Self.steadyFramesNeeded,
+              Date.now.timeIntervalSince(lastAutoLogAt) >= AppSettings.autoLogInterval,
+              !Self.showsSameLeaves(frame.detections, as: lastAutoLogged)
+        else { return }
         lastAutoLogAt = .now
+        lastAutoLogged = frame.detections
         record(frame, source: .auto)
+    }
+
+    /// The same view as the last saved frame: as many leaves, most of them in nearly the same place.
+    private static func showsSameLeaves(_ detections: [Detection], as previous: [Detection]) -> Bool {
+        guard !previous.isEmpty, detections.count == previous.count else { return false }
+        let matched = detections.filter { detection in
+            previous.contains { $0.leafClass == detection.leafClass && $0.rect.intersectionOverUnion(with: detection.rect) >= 0.5 }
+        }
+        return Double(matched.count) >= Double(detections.count) * 0.6
     }
 
     private func healthLogIfNeeded() {
@@ -388,6 +419,9 @@ final class ScanModel {
         self.session = session
         sessionStartedAt = session.startedAt
         eventsLoggedThisSession = 0
+        lastAutoLogged = []
+        steadySummary = nil
+        steadyFrames = 0
         frameCount = 0
         activeSeconds = 0
         inferenceTotalMs = 0
