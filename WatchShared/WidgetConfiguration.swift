@@ -87,55 +87,9 @@ struct WatchFieldIntent: WidgetConfigurationIntent {
 
 // MARK: - Relevance
 
-/// When each field matters, as Smart Stack contexts.
+/// When each field matters on the watch: the shared Smart Stack rules over the synced fields.
 nonisolated enum WatchRelevance {
-    /// A field is due for scouting once this long has passed since its last scan.
-    static let scoutingInterval: TimeInterval = 3 * 86_400
-
-    struct Context {
-        let field: WidgetSnapshot.FieldStatus
-        let relevance: RelevantContext
-    }
-
-    /// Where: at the field. `includeTiming` adds when: the morning a field is due for scouting,
-    /// and the next few hours while a field is moderate or severe.
-    static func contexts(now: Date = .now, includeTiming: Bool = true) -> [Context] {
-        let fields = WatchStore.payload?.snapshot.fields ?? []
-        var contexts: [Context] = []
-        for field in fields {
-            if let latitude = field.latitude, let longitude = field.longitude {
-                let region = CLCircularRegion(
-                    center: CLLocationCoordinate2D(latitude: latitude, longitude: longitude),
-                    // Small geofences are hard to detect reliably; give the Smart Stack a little margin.
-                    radius: max(field.radiusMeters ?? 100, 100),
-                    identifier: field.id
-                )
-                contexts.append(Context(field: field, relevance: .location(region)))
-            }
-            guard includeTiming else { continue }
-
-            if let severity = field.window(now: now).severity, severity >= .moderate {
-                contexts.append(Context(
-                    field: field,
-                    relevance: .date(interval: DateInterval(start: now, duration: 6 * 3600), kind: .informational)
-                ))
-            }
-            let lastScan = field.latestScan ?? .distantPast
-            if now.timeIntervalSince(lastScan) >= scoutingInterval, let morning = nextScoutingWindow(after: now) {
-                contexts.append(Context(field: field, relevance: .date(interval: morning, kind: .informational)))
-            }
-        }
-        return contexts
-    }
-
-    /// The next 6–10 AM window, when leaves are easiest to scout.
-    static func nextScoutingWindow(after now: Date, calendar: Calendar = .current) -> DateInterval? {
-        guard var start = calendar.date(bySettingHour: 6, minute: 0, second: 0, of: now),
-              let todayEnd = calendar.date(bySettingHour: 10, minute: 0, second: 0, of: now)
-        else { return nil }
-        if now >= todayEnd {
-            start = calendar.date(byAdding: .day, value: 1, to: start) ?? start
-        }
-        return DateInterval(start: max(start, now), end: calendar.date(byAdding: .hour, value: 4, to: start) ?? start)
+    static func contexts(now: Date = .now, includeTiming: Bool = true) -> [FieldRelevance.Context] {
+        FieldRelevance.contexts(for: WatchStore.payload?.snapshot.fields ?? [], now: now, includeTiming: includeTiming)
     }
 }

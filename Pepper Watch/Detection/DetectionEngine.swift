@@ -22,11 +22,15 @@ final class DetectionEngine {
     private(set) var detector: AphidDetector?
     private(set) var modelInfo: ModelInfo?
     private(set) var loadDuration: Duration?
-    private(set) var activeComputeUnits: ComputeUnitsOption?
+    /// The first prediction after a load, run before scanning so the first camera frame isn't slow.
+    private(set) var warmUpDuration: Duration?
+    private(set) var activeOptions: ModelLoadOptions?
+
+    var activeComputeUnits: ComputeUnitsOption? { activeOptions?.computeUnits }
 
     @ObservationIgnored private var loadedModel: LoadedModel?
     @ObservationIgnored private var configuration: DetectorConfiguration?
-    @ObservationIgnored private var loadingUnits: ComputeUnitsOption?
+    @ObservationIgnored private var loadingOptions: ModelLoadOptions?
     @ObservationIgnored private let logger: SystemLogger?
 
     init(logger: SystemLogger?) {
@@ -37,25 +41,27 @@ final class DetectionEngine {
         guard newConfiguration != configuration || detector == nil else { return }
         configuration = newConfiguration
 
-        if loadedModel?.computeUnits != newConfiguration.computeUnits {
-            // A load for these units is already running; it applies the latest configuration when done.
-            guard loadingUnits != newConfiguration.computeUnits else { return }
-            loadingUnits = newConfiguration.computeUnits
+        var needsWarmUp = false
+        if loadedModel?.options != newConfiguration.loadOptions {
+            // A load with these options is already running; it applies the latest configuration when done.
+            guard loadingOptions != newConfiguration.loadOptions else { return }
+            loadingOptions = newConfiguration.loadOptions
             state = .loading
             do {
-                let loaded = try await AphidDetector.loadModel(computeUnits: newConfiguration.computeUnits)
-                guard configuration?.computeUnits == loaded.computeUnits else { return }
-                loadingUnits = nil
+                let loaded = try await AphidDetector.loadModel(options: newConfiguration.loadOptions)
+                guard configuration?.loadOptions == loaded.options else { return }
+                loadingOptions = nil
                 loadedModel = loaded
                 loadDuration = loaded.loadDuration
-                activeComputeUnits = loaded.computeUnits
+                activeOptions = loaded.options
                 modelInfo = ModelInfo(model: loaded.mlModel, bundleURL: try? AphidDetector.modelURL())
+                needsWarmUp = true
                 logger?.log(
                     category: "model",
-                    "Loaded \(AphidDetector.modelName) on \(loaded.computeUnits.shortTitle) in \(loaded.loadDuration.formatted(.units(allowed: [.seconds, .milliseconds], width: .narrow)))"
+                    "Loaded \(AphidDetector.modelName) on \(loaded.computeUnits.shortTitle)\(loaded.options.fastPrediction ? " (fast prediction)" : "") in \(loaded.loadDuration.formatted(.units(allowed: [.seconds, .milliseconds], width: .narrow)))"
                 )
             } catch {
-                loadingUnits = nil
+                loadingOptions = nil
                 state = .failed(error.localizedDescription)
                 logger?.log(.error, category: "model", "Model failed to load: \(error.localizedDescription)")
                 return
@@ -64,7 +70,16 @@ final class DetectionEngine {
 
         guard let loadedModel, let configuration else { return }
         do {
-            detector = try AphidDetector(model: loadedModel, configuration: configuration)
+            let detector = try AphidDetector(model: loadedModel, configuration: configuration)
+            if needsWarmUp {
+                // Core ML finishes preparing the model on its first prediction; do that now
+                // rather than on the first camera frame.
+                let clock = ContinuousClock()
+                let start = clock.now
+                _ = try? await detector.detect(in: Self.syntheticImage())
+                warmUpDuration = start.duration(to: clock.now)
+            }
+            self.detector = detector
             state = .ready
         } catch {
             state = .failed(error.localizedDescription)

@@ -19,6 +19,8 @@ struct ModelInfoView: View {
     @State private var isBenchmarking = false
     @State private var benchmark: DetectionEngine.BenchmarkResult?
     @State private var benchmarkError: String?
+    @State private var computePlan: ComputePlanReport?
+    @State private var computePlanError: String?
 
     var body: some View {
         List {
@@ -33,6 +35,7 @@ struct ModelInfoView: View {
                 }
             }
             runtimeSection
+            computePlanSection
             benchmarkSection
             trainingMetricsSection
         }
@@ -69,8 +72,6 @@ struct ModelInfoView: View {
             }
         } header: {
             Text("Model")
-        } footer: {
-            Text(info.summary)
         }
     }
 
@@ -78,9 +79,74 @@ struct ModelInfoView: View {
         Section("Runtime") {
             LabeledContent("Status", value: statusText)
             LabeledContent("Compute units", value: engine.activeComputeUnits?.title ?? "—")
+            LabeledContent("Specialization", value: engine.activeOptions.map { $0.fastPrediction ? "Fast prediction" : "Default" } ?? "—")
             LabeledContent("Load time", value: engine.loadDuration.map { "\(($0 / .milliseconds(1)).fixed(0)) ms" } ?? "—")
+            LabeledContent("Warm-up", value: engine.warmUpDuration.map { "\(($0 / .milliseconds(1)).fixed(0)) ms" } ?? "—")
+            LabeledContent("Camera frames in flight", value: pipelineText)
             LabeledContent("Available devices", value: MLModel.availableComputeDevices.map { Self.describe($0) }.joined(separator: ", "))
             LabeledContent("Processing", value: "100% on-device")
+        }
+    }
+
+    private var pipelineText: String {
+        let hasNeuralEngine = MLModel.availableComputeDevices.contains { if case .neuralEngine = $0 { true } else { false } }
+        guard AppSettings.pipelinedInference, hasNeuralEngine, engine.activeComputeUnits != .cpuOnly else { return "1" }
+        return "Up to 2 while cool"
+    }
+
+    // MARK: - Compute plan
+
+    private var computePlanSection: some View {
+        Section {
+            if let computePlan {
+                Chart(ComputePlanReport.Device.allCases) { device in
+                    BarMark(x: .value("Share of estimated cost", computePlan.costShare[device] ?? 0), y: .value("Model", "Detector"))
+                        .foregroundStyle(by: .value("Device", device.rawValue))
+                }
+                .chartForegroundStyleScale([
+                    ComputePlanReport.Device.neuralEngine.rawValue: Color.green,
+                    ComputePlanReport.Device.gpu.rawValue: Color.blue,
+                    ComputePlanReport.Device.cpu.rawValue: Color.gray,
+                ])
+                .chartXScale(domain: 0...1)
+                .chartXAxis(.hidden)
+                .chartYAxis(.hidden)
+                .chartLegend(position: .bottom, spacing: 8)
+                .frame(height: 64)
+                .accessibilityLabel("Estimated cost by device")
+
+                ForEach(ComputePlanReport.Device.allCases) { device in
+                    LabeledContent(device.rawValue, value: (computePlan.costShare[device] ?? 0).percentText)
+                }
+                LabeledContent("Operations", value: "\(computePlan.operationCount)")
+                if !computePlan.fallbackOperators.isEmpty {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Not on the Neural Engine")
+                        Text(computePlan.fallbackOperators.prefix(6).map { "\($0.name) ×\($0.count)" }.joined(separator: ", "))
+                            .font(.caption.monospaced())
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            } else if let computePlanError {
+                Label(computePlanError, systemImage: "exclamationmark.triangle")
+                    .foregroundStyle(.secondary)
+            } else {
+                HStack {
+                    ProgressView()
+                    Text("Analyzing…").foregroundStyle(.secondary)
+                }
+            }
+        } header: {
+            Text("Compute Plan")
+        }
+        .task(id: engine.activeOptions) {
+            guard let options = engine.activeOptions else { return }
+            do {
+                computePlan = try await ComputePlanReport.load(options: options)
+                computePlanError = nil
+            } catch {
+                computePlanError = error.localizedDescription
+            }
         }
     }
 
@@ -157,8 +223,6 @@ struct ModelInfoView: View {
             }
         } header: {
             Text("Latency Benchmark")
-        } footer: {
-            Text("Times \(iterations) inferences on a synthetic 640×640 frame after 3 warm-up runs, reporting the mean and standard deviation as in the thesis unit-testing plan. Camera capture and drawing aren't included.")
         }
     }
 
@@ -186,8 +250,6 @@ struct ModelInfoView: View {
             }
         } header: {
             Text("Reported Validation Metrics")
-        } footer: {
-            Text("Enter the values from your Ultralytics validation run (results.csv) so they appear with the on-device results. mAP needs labeled ground truth, so it can't be measured in the app.")
         }
     }
 

@@ -57,7 +57,7 @@ struct WidgetBackground: View {
     }
 }
 
-// MARK: - Field Status widget (Lock Screen)
+// MARK: - Field Status widget (Home Screen and Lock Screen)
 
 struct FieldStatusWidgetView: View {
     let status: WidgetSnapshot.FieldStatus
@@ -67,6 +67,8 @@ struct FieldStatusWidgetView: View {
     var body: some View {
         let window = status.window(now: now)
         switch family {
+        case .systemSmall, .systemMedium, .systemLarge, .systemExtraLarge:
+            FieldSummaryView(status: status, window: window, showsWeek: family != .systemSmall, now: now)
         case .accessoryCircular:
             Gauge(value: window.infestationRate, in: 0...1) {
                 Image(systemName: "ant.fill")
@@ -92,6 +94,92 @@ struct FieldStatusWidgetView: View {
                 systemImage: "ant.fill"
             )
         }
+    }
+}
+
+/// Home Screen layout for one field: the week's infestation, and a bar per day when there's room.
+private struct FieldSummaryView: View {
+    let status: WidgetSnapshot.FieldStatus
+    let window: WidgetSnapshot.WindowSummary
+    let showsWeek: Bool
+    let now: Date
+
+    @Environment(\.colorScheme) private var colorScheme
+
+    /// White on the colorful gradient; the bright severity color on the dark one.
+    private var accent: Color {
+        colorScheme == .dark ? WidgetPalette.accent(for: window.severity) : .white
+    }
+
+    var body: some View {
+        HStack(spacing: 16) {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 4) {
+                    Image(systemName: "leaf.fill")
+                    Text(status.name)
+                        .lineLimit(1)
+                }
+                .font(.caption.weight(.semibold))
+                Spacer(minLength: 2)
+                Text(window.totalLeaves == 0 ? "—" : window.infestationRate.widgetPercent)
+                    .font(.system(size: 32, weight: .semibold, design: .rounded))
+                    .minimumScaleFactor(0.6)
+                    .contentTransition(.numericText())
+                    .foregroundStyle(accent)
+                SeverityTag(severity: window.severity, iconColor: accent)
+                Text(lastScan)
+                    .font(.caption2)
+                    .opacity(0.8)
+                    .lineLimit(1)
+                    .padding(.top, 2)
+            }
+            .frame(maxWidth: showsWeek ? 132 : .infinity, alignment: .leading)
+
+            if showsWeek {
+                WeekBars(status: status, now: now, accent: accent)
+            }
+        }
+        .foregroundStyle(.white)
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    }
+
+    private var lastScan: String {
+        guard let latestScan = status.latestScan else { return "No scans yet" }
+        return "Scanned \(latestScan.formatted(.relative(presentation: .named, unitsStyle: .abbreviated)))"
+    }
+}
+
+/// The past 7 days as bars, scaled to the week's worst day; days without scans show a dot.
+private struct WeekBars: View {
+    let status: WidgetSnapshot.FieldStatus
+    let now: Date
+    let accent: Color
+
+    var body: some View {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: now)
+        let days = (0..<7).compactMap { calendar.date(byAdding: .day, value: $0 - 6, to: today) }
+        let counts = Dictionary(status.daily.map { (calendar.startOfDay(for: $0.date), $0) }, uniquingKeysWith: { first, _ in first })
+        let peak = max(days.compactMap { counts[$0]?.rate }.max() ?? 0, 0.1)
+
+        HStack(alignment: .bottom, spacing: 6) {
+            ForEach(days, id: \.self) { day in
+                VStack(spacing: 4) {
+                    GeometryReader { proxy in
+                        let height = counts[day].map { max(proxy.size.height * $0.rate / peak, 4) } ?? 4
+                        Capsule()
+                            .fill(counts[day] == nil ? AnyShapeStyle(.white.opacity(0.25)) : AnyShapeStyle(accent))
+                            .frame(height: height)
+                            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
+                    }
+                    Text(day.formatted(.dateTime.weekday(.narrow)))
+                        .font(.caption2.weight(.semibold))
+                        .opacity(calendar.isDate(day, inSameDayAs: now) ? 1 : 0.7)
+                }
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("Infestation over the past 7 days")
     }
 }
 
