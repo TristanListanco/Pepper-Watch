@@ -108,6 +108,8 @@ final class DeviceMonitor {
 
     func refresh() {
         snapshot = DeviceMetrics.snapshot()
+        // Two screens can poll at once (the Developer summary and the monitor); keep one sample a second.
+        if let last = memoryHistory.last, Date.now.timeIntervalSince(last.date) < 1 { return }
         memoryHistory.append(MemorySample(date: .now, megabytes: snapshot.memoryMB))
         if memoryHistory.count > 90 { memoryHistory.removeFirst(memoryHistory.count - 90) }
     }

@@ -35,6 +35,7 @@ final class AppServices {
     let geofence: GeofenceService
     let scanner: ScanModel
     let deviceMonitor = DeviceMonitor()
+    let metrics: MetricsCollector
     let widgetSync: WidgetSync
     let watchSync: WatchSync
 
@@ -57,6 +58,7 @@ final class AppServices {
         scanner = ScanModel(context: context, engine: engine, logger: logger, location: location, geofence: geofence)
         watchSync = WatchSync(context: context)
         widgetSync = WidgetSync(context: context, watch: watchSync)
+        metrics = MetricsCollector(logger: logger)
     }
 }
 
@@ -71,11 +73,13 @@ struct AppRootView: View {
             .environment(services.location)
             .environment(services.geofence)
             .environment(services.deviceMonitor)
+            .environment(services.metrics)
             .environment(\.systemLogger, services.logger)
             .environment(\.widgetSync, services.widgetSync)
             .modelContainer(services.container)
             .task { await services.engine.configure(AppSettings.detectorConfiguration) }
             .task { services.widgetSync.start() }
+            .task { services.metrics.start() }
             .onChange(of: scenePhase) { _, phase in
                 // Make sure widgets have the latest numbers when the user leaves the app.
                 if phase == .background { services.widgetSync.update() }
