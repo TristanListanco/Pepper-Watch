@@ -47,7 +47,7 @@ private struct ScanReportView: View {
             HStack(alignment: .firstTextBaseline) {
                 Label("Pepper Watch", systemImage: "leaf.fill")
                     .font(.headline)
-                    .foregroundStyle(Color("AccentColor"))
+                    .foregroundStyle(Color(.accent))
                 Spacer()
                 Text("Scan Report")
                     .font(.headline)
@@ -191,5 +191,30 @@ private struct ScanReportView: View {
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
+    }
+}
+
+/// While a scan's details are open, a screenshot offers the scan's PDF report as its "Full Page"
+/// option (UIScreenshotService), so the whole report can be marked up and saved from there.
+final class ScreenshotReportProvider: NSObject, UIScreenshotServiceDelegate {
+    static let shared = ScreenshotReportProvider()
+    private var reportURL: URL?
+
+    /// Offers `url` for full-page screenshots, attaching to every window of the app.
+    func show(_ url: URL?) {
+        reportURL = url
+        for scene in UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }) {
+            scene.screenshotService?.delegate = self
+        }
+    }
+
+    /// Stops offering `url` once its scan is closed.
+    func clear(_ url: URL?) {
+        if reportURL == url { reportURL = nil }
+    }
+
+    func screenshotService(_ screenshotService: UIScreenshotService, generatePDFRepresentationWithCompletion completionHandler: @escaping (Data?, Int, CGRect) -> Void) {
+        // No report open: the screenshot editor shows only the screen.
+        completionHandler(reportURL.flatMap { try? Data(contentsOf: $0) }, 0, .zero)
     }
 }

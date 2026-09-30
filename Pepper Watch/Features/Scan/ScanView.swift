@@ -29,7 +29,10 @@ struct ScanView: View {
     @State private var photoAnalysis: PhotoAnalysis?
     @State private var isAnalyzingPhoto = false
     @State private var isVisible = false
-    @State private var flashOpacity = 0.0
+    /// Round controls grow with Dynamic Type (capped over the camera) instead of staying 44 pt.
+    @ScaledMetric(relativeTo: .title3) private var controlSize = 44.0
+    @ScaledMetric(relativeTo: .caption) private var zoomSize = 36.0
+    @State private var isDropTargeted = false
     @Namespace private var glassNamespace
 
     private var isActive: Bool { isVisible && scenePhase == .active }
@@ -51,7 +54,18 @@ struct ScanView: View {
         ZStack {
             Color.black.ignoresSafeArea()
             content
-            Color.white.opacity(flashOpacity).ignoresSafeArea().allowsHitTesting(false)
+            // A quick white flash for each snapshot, like the Camera app.
+            Color.white
+                .ignoresSafeArea()
+                .allowsHitTesting(false)
+                .keyframeAnimator(initialValue: 0.0, trigger: scanner.snapshotCount) { flash, opacity in
+                    flash.opacity(opacity)
+                } keyframes: { _ in
+                    KeyframeTrack {
+                        LinearKeyframe(0.7, duration: 0.03)
+                        CubicKeyframe(0, duration: 0.35)
+                    }
+                }
         }
         // Tap the title to rename the field in place.
         .navigationTitle(nameBinding)
@@ -66,6 +80,7 @@ struct ScanView: View {
                     Button(scanner.isTorchOn ? "Turn Off Light" : "Turn On Light", systemImage: scanner.isTorchOn ? "flashlight.on.fill" : "flashlight.off.fill") {
                         scanner.toggleTorch()
                     }
+                    .contentTransition(.symbolEffect(.replace))
                 }
             }
         }
@@ -87,19 +102,37 @@ struct ScanView: View {
             guard let item else { return }
             Task { await analyzePhoto(item) }
         }
-        .onChange(of: scanner.snapshotCount) {
-            flashOpacity = 0.7
-            withAnimation(.easeOut(duration: 0.35)) { flashOpacity = 0 }
-        }
         .sensoryFeedback(.impact(weight: .medium), trigger: scanner.snapshotCount) { _, _ in hapticsEnabled }
+        .sensoryFeedback(.selection, trigger: scanner.zoom) { _, _ in hapticsEnabled }
+        .sensoryFeedback(.impact(weight: .light), trigger: scanner.isPaused) { _, _ in hapticsEnabled }
         .sensoryFeedback(trigger: scanner.stableSeverity) { old, new in
             guard hapticsEnabled, let new, new > (old ?? .clear), new >= .moderate else { return nil }
             return .warning
         }
         .sheet(item: $photoAnalysis) { analysis in
             PhotoAnalysisView(analysis: analysis, field: field)
-                .tint(Color("AccentColor"))
+                .tint(Color(.accent))
+                .presentationDetents([.medium, .large])
+                .presentationDragIndicator(.visible)
         }
+        // Drop a photo from Photos or Files onto the scanner to analyze it, handy in iPad split view.
+        .dropDestination(for: DroppedPhoto.self) { photos, _ in
+            guard let photo = photos.first, engine.detector != nil, !isAnalyzingPhoto else { return false }
+            Task { await analyzePhoto(data: photo.data) }
+            return true
+        } isTargeted: { isDropTargeted = $0 }
+        .overlay {
+            if isDropTargeted {
+                Label("Drop to Analyze", systemImage: "photo.on.rectangle.angled")
+                    .font(.headline)
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 14)
+                    .glassEffect(.regular, in: .capsule)
+                    .environment(\.colorScheme, .dark)
+                    .transition(.scale.combined(with: .opacity))
+            }
+        }
+        .animation(.smooth, value: isDropTargeted)
     }
 
     @ViewBuilder
@@ -193,6 +226,8 @@ struct ScanView: View {
         .animation(.smooth, value: scanner.isPaused)
         // Controls over the camera always use dark glass with white text.
         .environment(\.colorScheme, .dark)
+        // Text grows with Dynamic Type, up to a size where the controls still fit over the camera.
+        .dynamicTypeSize(...DynamicTypeSize.accessibility2)
     }
 
     private var topBar: some View {
@@ -216,13 +251,24 @@ struct ScanView: View {
         return VStack(alignment: .trailing, spacing: 2) {
             HStack(spacing: 4) {
                 Image(systemName: belowTarget ? "tortoise.fill" : "hare.fill")
+                    .contentTransition(.symbolEffect(.replace))
                 Text("\(scanner.fps.fixed(1)) FPS")
                     .contentTransition(.numericText(value: scanner.fps))
             }
             .font(.caption.weight(.semibold).monospacedDigit())
-            Text("\(scanner.inferenceMs.fixed(0)) ms · \(scanner.eventsLoggedThisSession) logged")
-                .font(.caption2.monospacedDigit())
-                .foregroundStyle(.secondary)
+            HStack(spacing: 0) {
+                // How long this session has run; the system updates it without redrawing the view.
+                if let start = scanner.sessionStartedAt {
+                    Text(timerInterval: start...Date.distantFuture, countsDown: false)
+                    Text(" · ")
+                }
+                Text("\(scanner.inferenceMs.fixed(0)) ms · \(scanner.eventsLoggedThisSession) logged")
+                    // The count rolls up as leaves are saved.
+                    .contentTransition(.numericText(value: Double(scanner.eventsLoggedThisSession)))
+                    .animation(.smooth, value: scanner.eventsLoggedThisSession)
+            }
+            .font(.caption2.monospacedDigit())
+            .foregroundStyle(.secondary)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -269,6 +315,8 @@ struct ScanView: View {
             Image(systemName: "camera.aperture")
                 .font(.title3)
                 .foregroundStyle(.yellow)
+                // A wiggle every few seconds draws the eye while the lens needs wiping (SF Symbols 6).
+                .symbolEffect(.wiggle, options: .repeat(.periodic(delay: 3)), isActive: true)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(12)
@@ -305,6 +353,8 @@ struct ScanView: View {
                     .buttonStyle(.glass)
                 }
             }
+            // The buttons share the banner's width (iOS 26).
+            .buttonSizing(.flexible)
             .font(.caption.weight(.semibold))
         }
         .padding(14)
@@ -348,6 +398,9 @@ struct ScanView: View {
         ShutterButton {
             scanner.captureSnapshot()
         }
+        // The space bar takes a snapshot with a hardware keyboard, like the Camera app.
+        .keyboardShortcut(.space, modifiers: [])
+        .help("Capture Snapshot (Space)")
         .disabled(scanner.status != .running || scanner.isPaused || scanner.isLoggingBlockedByGeofence)
         .popoverTip(SnapshotTip())
     }
@@ -358,12 +411,14 @@ struct ScanView: View {
         } label: {
             Image(systemName: scanner.isPaused ? "play.fill" : "pause.fill")
                 .font(.title3)
-                .frame(width: 44, height: 44)
+                .frame(width: controlSize, height: controlSize)
                 .contentTransition(.symbolEffect(.replace))
         }
         .accessibilityLabel(scanner.isPaused ? "Start Detecting" : "Pause Detecting")
         .buttonStyle(.glass)
         .buttonBorderShape(.circle)
+        .keyboardShortcut("p", modifiers: [])
+        .help(scanner.isPaused ? "Start Detecting (P)" : "Pause Detecting (P)")
         .disabled(scanner.status != .running)
     }
 
@@ -378,12 +433,14 @@ struct ScanView: View {
                     scanner.setZoom(preset)
                 } label: {
                     Text(isSelected ? "\(number)×" : number)
-                        .font(.system(size: isSelected ? 13 : 11, weight: .bold).monospacedDigit())
-                        .frame(width: 36, height: 36)
+                        .font(isSelected ? .caption.weight(.bold).monospacedDigit() : .caption2.weight(.bold).monospacedDigit())
+                        .frame(width: zoomSize, height: zoomSize)
                         .background(isSelected ? AnyShapeStyle(.white.opacity(0.22)) : AnyShapeStyle(.clear), in: .circle)
                         .contentShape(.circle)
                 }
                 .buttonStyle(.plain)
+                .hoverEffect(.highlight)
+                .help("Zoom \(number)×")
                 .accessibilityLabel("Zoom \(number) times")
                 .accessibilityAddTraits(isSelected ? .isSelected : [])
             }
@@ -413,25 +470,29 @@ struct ScanView: View {
                     }
                 }
                 .font(.title3)
-                .frame(width: 44, height: 44)
+                .frame(width: controlSize, height: controlSize)
                 .accessibilityLabel("Analyze a photo")
             }
         }
         .buttonStyle(.glass)
         .buttonBorderShape(label == nil ? .circle : .capsule)
+        .help("Analyze a Photo")
         .disabled(isAnalyzingPhoto || engine.detector == nil)
     }
 
     // MARK: - Photo import
 
     private func analyzePhoto(_ item: PhotosPickerItem) async {
+        defer { photoItem = nil }
+        guard let data = try? await item.loadTransferable(type: Data.self) else { return }
+        await analyzePhoto(data: data)
+    }
+
+    /// Runs the detector on a picked or dropped photo and shows the result.
+    private func analyzePhoto(data: Data) async {
         isAnalyzingPhoto = true
-        defer {
-            isAnalyzingPhoto = false
-            photoItem = nil
-        }
+        defer { isAnalyzingPhoto = false }
         guard let detector = engine.detector,
-              let data = try? await item.loadTransferable(type: Data.self),
               let image = await ImageEncoder.uprightImage(from: data)
         else { return }
 
@@ -450,21 +511,23 @@ struct ScanView: View {
 private struct ShutterButton: View {
     let action: () -> Void
     @Environment(\.isEnabled) private var isEnabled
+    @ScaledMetric(relativeTo: .largeTitle) private var diameter = 74.0
 
     var body: some View {
         Button(action: action) {
             ZStack {
                 Circle()
                     .strokeBorder(.white, lineWidth: 4)
-                    .frame(width: 74, height: 74)
+                    .frame(width: diameter, height: diameter)
                 Circle()
                     .fill(.white)
-                    .frame(width: 60, height: 60)
+                    .frame(width: diameter - 14, height: diameter - 14)
             }
             .opacity(isEnabled ? 1 : 0.45)
             .contentShape(.circle)
         }
         .buttonStyle(ShutterPressStyle())
+        .hoverEffect(.lift)
         .accessibilityLabel("Capture Snapshot")
     }
 

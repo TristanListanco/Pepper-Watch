@@ -403,6 +403,7 @@ final class ScanModel {
         event.field = field
         event.boxes = frame.detections.map(BoundingBox.init)
         eventsLoggedThisSession += 1
+        AppNavigator.shared.noteNewScan()
 
         Task {
             let encoded = await ImageEncoder.encode(frame.frame)

@@ -24,6 +24,7 @@ struct DeveloperView: View {
     @AppStorage(SettingsKey.hapticsEnabled) private var hapticsEnabled = true
     @AppStorage(SettingsKey.autoLogEnabled) private var autoLogEnabled = true
     @AppStorage(SettingsKey.autoLogInterval) private var autoLogInterval = 10.0
+    @AppStorage(SettingsKey.fpsTarget) private var fpsTarget = 17.0
     @AppStorage(SettingsKey.autoLogRequiresAphids) private var autoLogRequiresAphids = false
     @AppStorage(SettingsKey.geotagEnabled) private var geotagEnabled = true
     @AppStorage(SettingsKey.healthLogInterval) private var healthLogInterval = 30.0
@@ -31,8 +32,9 @@ struct DeveloperView: View {
     @State private var showsWidgetGallery = Self.opensPage("widgets")
     @State private var showsModelCard = Self.opensPage("model")
     @State private var showsPerformance = Self.opensPage("performance")
+    @State private var showsSessions = Self.opensPage("sessions")
 
-    /// Debug builds accept `-PWDeveloperPage widgets|model|performance` to open that page for screenshots.
+    /// Debug builds accept `-PWDeveloperPage widgets|model|performance|sessions` to open that page for screenshots.
     private static func opensPage(_ page: String) -> Bool {
         #if DEBUG
         UserDefaults.standard.string(forKey: "PWDeveloperPage") == page
@@ -72,6 +74,7 @@ struct DeveloperView: View {
             .navigationDestination(isPresented: $showsWidgetGallery) { WidgetGalleryView() }
             .navigationDestination(isPresented: $showsModelCard) { ModelInfoView() }
             .navigationDestination(isPresented: $showsPerformance) { PerformanceMonitorView() }
+            .navigationDestination(isPresented: $showsSessions) { SessionsTableView() }
             .task(id: detectorConfiguration) {
                 // Debounce slider drags: a newer value cancels this task before it applies.
                 try? await Task.sleep(for: .milliseconds(150))
@@ -107,6 +110,9 @@ struct DeveloperView: View {
             }
             Toggle("Fast prediction", isOn: $fastPrediction)
             Toggle("Pipelined inference", isOn: $pipelinedInference)
+            Stepper(value: $fpsTarget, in: 5...60, step: 1) {
+                LabeledContent("Real-time target", value: "\(Int(fpsTarget)) FPS")
+            }
         } header: {
             Text("Model")
         }
@@ -124,8 +130,8 @@ struct DeveloperView: View {
 
     private var detectionSection: some View {
         Section {
-            thresholdSlider("Confidence threshold", value: $confidenceThreshold, range: 0.05...0.95)
-            thresholdSlider("IoU threshold (NMS)", value: $iouThreshold, range: 0.1...0.95)
+            thresholdSlider("Confidence threshold", value: $confidenceThreshold, range: 0.05...0.95, modelDefault: engine.modelInfo?.defaultConfidence ?? 0.25)
+            thresholdSlider("IoU threshold (NMS)", value: $iouThreshold, range: 0.1...0.95, modelDefault: engine.modelInfo?.defaultIoU ?? 0.7)
             Toggle("One class per leaf", isOn: $classAgnosticNMS)
             Button("Restore Model Defaults", systemImage: "arrow.counterclockwise") {
                 confidenceThreshold = engine.modelInfo?.defaultConfidence ?? 0.25
@@ -141,14 +147,17 @@ struct DeveloperView: View {
         }
     }
 
-    private func thresholdSlider(_ title: String, value: Binding<Double>, range: ClosedRange<Double>) -> some View {
+    /// The fill grows from the model's default (iOS 26 neutral value), so it's clear how far a
+    /// threshold is from what the model was exported with; each 0.05 step gets a tick.
+    private func thresholdSlider(_ title: String, value: Binding<Double>, range: ClosedRange<Double>, modelDefault: Double) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             LabeledContent(title) {
                 Text(value.wrappedValue.fixed(2)).monospacedDigit()
             }
-            Slider(value: value, in: range, step: 0.05)
-                .accessibilityLabel(title)
-                .accessibilityValue(value.wrappedValue.fixed(2))
+            Slider(value: value, in: range, step: 0.05, neutralValue: modelDefault) {
+                Text(title)
+            }
+            .accessibilityValue(value.wrappedValue.fixed(2))
         }
     }
 
@@ -260,35 +269,22 @@ private struct PerformanceSection: View {
 
     var body: some View {
         Section {
-            VStack(spacing: 0) {
-                // A plain button rather than a NavigationLink, so the stepper below keeps its own taps.
-                Button(action: openMonitor) {
-                    HStack(spacing: 12) {
-                        summary
-                        Image(systemName: "chevron.right")
-                            .font(.footnote.weight(.semibold))
-                            .foregroundStyle(.tertiary)
-                    }
-                    .contentShape(.rect)
+            Button(action: openMonitor) {
+                HStack(spacing: 12) {
+                    summary
+                    Image(systemName: "chevron.right")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundStyle(.tertiary)
                 }
-                .buttonStyle(.plain)
-                .accessibilityHint("Opens the Performance Monitor")
-                .padding(.bottom, 14)
-
-                Divider()
-
-                Stepper(value: $fpsTarget, in: 5...60, step: 1) {
-                    LabeledContent("Real-time target", value: "\(Int(fpsTarget)) FPS")
-                }
-                .padding(.top, 10)
+                .padding(16)
+                .contentShape(.rect)
             }
-            .padding(16)
-            .glassEffect(.regular, in: .rect(cornerRadius: 24))
+            .buttonStyle(.plain)
+            .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 24))
+            .accessibilityHint("Opens the Performance Monitor")
             .listRowInsets(EdgeInsets())
             .listRowBackground(Color.clear)
             .task { await monitor.monitor() }
-        } header: {
-            Text("Performance")
         }
     }
 
@@ -443,6 +439,22 @@ private struct DataManagementSection: View {
         .accessibilityValue(preparing == kind ? "Preparing" : "")
     }
 
+    private func title(for kind: ExportKind) -> String {
+        switch kind {
+        case .detections: "Detections · \(events.count) scans"
+        case .sessions: "Sessions · \(sessions.count) sessions"
+        case .systemLog: "System Log · \(logs.count) entries"
+        }
+    }
+
+    private func symbol(for kind: ExportKind) -> String {
+        switch kind {
+        case .detections: "tablecells"
+        case .sessions: "timer"
+        case .systemLog: "doc.text"
+        }
+    }
+
     /// Builds the CSV, writes it to a file and opens the share sheet, with a spinner meanwhile.
     private func export(_ kind: ExportKind) {
         guard preparing == nil else { return }
@@ -458,7 +470,7 @@ private struct DataManagementSection: View {
             do {
                 let url = try await document.writeToTemporaryFile()
                 preparing = nil
-                SharePresenter.present([url], from: rowFrames[kind])
+                SharePresenter.present(file: url, title: title(for: kind), symbol: symbol(for: kind), from: rowFrames[kind])
             } catch {
                 preparing = nil
                 exportError = error.localizedDescription

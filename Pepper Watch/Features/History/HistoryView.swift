@@ -57,14 +57,20 @@ struct HistoryView: View {
     @State private var path: [DetectionEvent] = []
     /// The live pinch. Gesture state resets on its own, springing back, even when the system
     /// cancels the pinch midway, so the grid never stays stuck at a scale.
-    @GestureState(resetTransaction: Transaction(animation: .spring(response: 0.38, dampingFraction: 0.82)))
+    @GestureState(resetTransaction: Transaction(animation: HistoryView.resizeAnimation))
     private var pinch: Pinch?
+
+    /// One spring for the grid settling after a pinch or a size change from the menu.
+    static let resizeAnimation = Animation.spring(duration: 0.42, bounce: 0.12)
     @State private var scrollPosition = ScrollPosition(idType: UUID.self)
     /// Thumbnails on screen, in order, and the visible part of the grid, to keep the pinched
     /// photos in view when the thumbnail size changes.
     @State private var visibleIDs: [UUID] = []
     @State private var visibleRect: CGRect = .zero
     @Namespace private var zoomSpace
+    /// Each thumbnail's geometry, matched across thumbnail sizes so tiles glide to their new
+    /// place and size instead of the grid reflowing.
+    @Namespace private var gridSpace
 
     private struct Pinch: Equatable {
         var magnification: CGFloat
@@ -119,6 +125,7 @@ struct HistoryView: View {
             .background(Color(.systemGroupedBackground))
             .sensoryFeedback(.selection, trigger: thumbnailLevel)
             .navigationTitle(isSelecting ? (selection.isEmpty ? "Select Items" : "\(selection.count) Selected") : "History")
+            .navigationSubtitle(isSelecting || visibleEvents.isEmpty ? "" : "\(visibleEvents.count) \(visibleEvents.count == 1 ? "scan" : "scans")")
             .navigationBarTitleDisplayMode(isSelecting ? .inline : .automatic)
             .navigationDestination(for: DetectionEvent.self) { event in
                 DetectionDetailView(event: event)
@@ -185,8 +192,13 @@ struct HistoryView: View {
         .padding(.horizontal, 3)
     }
 
-    @ViewBuilder
     private func tile(for event: DetectionEvent) -> some View {
+        tileContent(for: event)
+            .matchedGeometryEffect(id: event.id, in: gridSpace)
+    }
+
+    @ViewBuilder
+    private func tileContent(for event: DetectionEvent) -> some View {
         if isSelecting {
             Button {
                 toggleSelection(event)
@@ -200,6 +212,7 @@ struct HistoryView: View {
                 HistoryTile(event: event, compact: thumbnailSize < 90, isSelected: nil)
             }
             .buttonStyle(.plain)
+            .hoverEffect(.lift)
             .matchedTransitionSource(id: event.id, in: zoomSpace)
             .contextMenu {
                 Button("Select", systemImage: "checkmark.circle") {
@@ -213,6 +226,12 @@ struct HistoryView: View {
                 AnnotatedImageView(imageData: event.imageData, detections: event.detections)
                     .frame(width: 300)
             }
+            // Drag a scan's photo into Photos, Files, Mail or another app (iOS 16 Transferable).
+            // The full image is loaded only when a drag starts.
+            .draggable(ScanPhoto(
+                data: event.imageData ?? event.thumbnailData ?? Data(),
+                filename: "pepper-watch-\(event.timestamp.formatted(.iso8601.year().month().day().time(includingFractionalSeconds: false).timeSeparator(.omitted))).jpg"
+            ))
         }
     }
 
@@ -250,7 +269,7 @@ struct HistoryView: View {
                 // The photo near the pinch, and how far down the screen it was.
                 let fraction = visibleRect.height > 0 ? min(max((value.startLocation.y - visibleRect.minY) / visibleRect.height, 0), 1) : 0.5
                 let anchorID = visibleIDs.isEmpty ? nil : visibleIDs[min(Int(fraction * CGFloat(visibleIDs.count)), visibleIDs.count - 1)]
-                withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
+                withAnimation(Self.resizeAnimation) {
                     thumbnailLevel = level
                     if let anchorID {
                         scrollPosition.scrollTo(id: anchorID, anchor: UnitPoint(x: 0.5, y: fraction))
@@ -292,6 +311,7 @@ struct HistoryView: View {
                 .disabled(events.isEmpty)
             }
             .visibilityPriority(.low)
+            ToolbarSpacer(.fixed, placement: .primaryAction)
             ToolbarItem(placement: .primaryAction) {
                 Menu {
                     Picker("Show", selection: $filter.animation()) {
@@ -310,13 +330,13 @@ struct HistoryView: View {
                     }
                     Section("Thumbnail Size") {
                         Button("Larger", systemImage: "plus.magnifyingglass") {
-                            withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
+                            withAnimation(Self.resizeAnimation) {
                                 thumbnailLevel = min(thumbnailLevel + 1, Self.thumbnailSizes.count - 1)
                             }
                         }
                         .disabled(thumbnailLevel == Self.thumbnailSizes.count - 1)
                         Button("Smaller", systemImage: "minus.magnifyingglass") {
-                            withAnimation(.spring(response: 0.38, dampingFraction: 0.82)) {
+                            withAnimation(Self.resizeAnimation) {
                                 thumbnailLevel = max(thumbnailLevel - 1, 0)
                             }
                         }
@@ -325,6 +345,7 @@ struct HistoryView: View {
                 } label: {
                     Label("Filter", systemImage: filter == .all && fieldFilterID.isEmpty ? "line.3.horizontal.decrease" : "line.3.horizontal.decrease.circle.fill")
                 }
+                .help("Filter and Thumbnail Size")
                 .popoverTip(events.isEmpty ? nil : PinchGridTip())
             }
             .visibilityPriority(.high)

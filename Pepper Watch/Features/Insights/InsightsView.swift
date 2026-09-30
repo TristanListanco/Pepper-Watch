@@ -116,9 +116,12 @@ struct InsightsView: View {
     @AppStorage("insights.showAllMetrics") private var showAllMetrics = false
     @AppStorage(PinnedMetrics.key) private var pinnedRaw = PinnedMetrics.defaultValue
     @State private var isEditingPinned = false
+    @State private var isExporting = false
+    @State private var exportFrame: CGRect?
     @State private var narrator = InsightNarrator()
+    /// The pinned-metrics editor zooms out of its Edit button (iOS 26).
+    @Namespace private var sheetTransition
     @State private var path: [InsightMetric] = Self.initialPath
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     /// Debug builds accept `-PWInsightMetric infestation` to open a detail page for screenshots.
     private static var initialPath: [InsightMetric] {
@@ -157,6 +160,7 @@ struct InsightsView: View {
             }
             .sheet(isPresented: $isEditingPinned) {
                 EditPinnedMetricsView()
+                    .navigationTransition(.zoom(sourceID: "editPinned", in: sheetTransition))
             }
             .onChange(of: AppNavigator.shared.pendingInsightsFieldID, initial: true) { _, fieldID in
                 // Widget taps and "Show insights" open Insights filtered to that field.
@@ -177,14 +181,25 @@ struct InsightsView: View {
                     } label: {
                         Label("Field", systemImage: selectedField == nil ? "line.3.horizontal.decrease" : "line.3.horizontal.decrease.circle.fill")
                     }
+                    .help("Filter by Field")
                 }
                 // When space runs short the field filter stays and export moves to the overflow menu.
                 .visibilityPriority(.high)
                 if !scopedEvents.isEmpty {
+                    ToolbarSpacer(.fixed, placement: .primaryAction)
                     ToolbarItem(placement: .primaryAction) {
-                        ShareLink(item: CSVExporter.detections(scopedEvents), preview: SharePreview("Pepper Watch detections")) {
-                            Label("Export CSV", systemImage: "square.and.arrow.up")
+                        Button {
+                            exportScope()
+                        } label: {
+                            if isExporting {
+                                ProgressView()
+                            } else {
+                                Label("Export CSV", systemImage: "square.and.arrow.up")
+                            }
                         }
+                        .disabled(isExporting)
+                        .help("Export Detections as CSV")
+                        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { exportFrame = $0 }
                     }
                     .visibilityPriority(.low)
                 }
@@ -215,12 +230,11 @@ struct InsightsView: View {
 
         return ScrollView {
             VStack(alignment: .leading, spacing: 12) {
-                SectionHeader(title: "Highlights")
                 HighlightsCard(narrator: narrator, fallback: fallback) {
                     narrator.refresh(facts: facts, scope: selectedFieldID, force: true)
                 }
 
-                SectionHeader(title: "Pinned", actionTitle: "Edit") {
+                SectionHeader(title: "Pinned", actionTitle: "Edit", actionTransition: (id: "editPinned", namespace: sheetTransition)) {
                     isEditingPinned = true
                     PinMetricsTip().invalidate(reason: .actionPerformed)
                 }
@@ -264,14 +278,31 @@ struct InsightsView: View {
             }
             .padding()
         }
-        // iPad: a subtle multicolor wash across the top, like the Health summary page.
-        .summaryGradientBackground(isVisible: horizontalSizeClass == .regular)
+        // A subtle multicolor wash across the top, like the Fields tab and the Health summary page.
+        .summaryGradientBackground()
         .refreshable {
             // Pull down to regenerate the summary from the latest scans.
             await narrator.regenerate(facts: facts, scope: selectedFieldID)
             widgetSync?.update()
         }
         .task(id: facts) { narrator.refresh(facts: facts, scope: selectedFieldID) }
+    }
+
+    /// Builds the CSV for the current scope with a spinner in place of the button, then shares it.
+    private func exportScope() {
+        guard !isExporting else { return }
+        isExporting = true
+        Task {
+            // Let the spinner appear before the rows are read.
+            try? await Task.sleep(for: .milliseconds(120))
+            let document = CSVExporter.detections(scopedEvents)
+            let url = try? await document.writeToTemporaryFile()
+            isExporting = false
+            if let url {
+                let scope = selectedField?.name ?? "All Fields"
+                SharePresenter.present(file: url, title: "Detections · \(scope)", from: exportFrame)
+            }
+        }
     }
 
     /// One column on iPhone, two or more on iPad depending on the available width.
@@ -301,6 +332,7 @@ struct InsightsView: View {
             InsightSummaryCard(metric: metric, current: current)
         }
         .buttonStyle(.plain)
+        .hoverEffect(.lift)
         .contextMenu {
             Button(isPinned ? "Unpin" : "Pin", systemImage: isPinned ? "pin.slash" : "pin") {
                 withAnimation(.smooth) { pinnedRaw = PinnedMetrics.toggling(metric, in: pinnedRaw) }
@@ -427,6 +459,8 @@ private struct SectionHeader: View {
     let title: String
     var detail: String?
     var actionTitle: String?
+    /// A sheet the action presents can zoom out of the button.
+    var actionTransition: (id: String, namespace: Namespace.ID)?
     var action: (() -> Void)?
 
     var body: some View {
@@ -442,9 +476,14 @@ private struct SectionHeader: View {
             }
             Spacer()
             if let actionTitle, let action {
-                Button(actionTitle, action: action)
+                let button = Button(actionTitle, action: action)
                     .font(.body.weight(.medium))
                     .popoverTip(actionTitle == "Edit" ? PinMetricsTip() : nil)
+                if let actionTransition {
+                    button.matchedTransitionSource(id: actionTransition.id, in: actionTransition.namespace)
+                } else {
+                    button
+                }
             }
         }
         .padding(.horizontal, 4)
@@ -457,7 +496,7 @@ private struct HighlightsCard: View {
     let narrator: InsightNarrator
     let fallback: HighlightContent
     let onRegenerate: () -> Void
-    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @State private var regenerations = 0
 
     private var isAI: Bool {
         switch narrator.phase {
@@ -470,25 +509,52 @@ private struct HighlightsCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .firstTextBaseline, spacing: 12) {
-                if let headline = content.headline {
-                    Text(headline)
-                        .font(.title3.weight(.semibold))
-                        .contentTransition(.opacity)
-                } else {
-                    Text("Summarizing your scans…")
-                        .font(.title3.weight(.semibold))
-                        .foregroundStyle(.secondary)
+            HStack(spacing: 8) {
+                Label {
+                    Text("Highlights")
+                } icon: {
+                    // Sparkles draw in once Apple Intelligence has summarized the scans.
+                    if isAI {
+                        Image(systemName: "sparkles")
+                            .transition(.symbolEffect(.drawOn))
+                    } else {
+                        Image(systemName: "lightbulb.max.fill")
+                    }
                 }
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(Color.highlight)
                 Spacer(minLength: 0)
                 if narrator.phase == .generating {
                     ProgressView()
                         .controlSize(.small)
                 } else if isAI || narrator.phase.isFailure {
-                    Button("Regenerate", systemImage: "arrow.clockwise", action: onRegenerate)
-                        .labelStyle(.iconOnly)
+                    Button("Regenerate", systemImage: "arrow.clockwise") {
+                        regenerations += 1
+                        onRegenerate()
+                    }
+                    .labelStyle(.iconOnly)
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .symbolEffect(.rotate, value: regenerations)
+                }
+            }
+
+            if let headline = content.headline {
+                Text(headline)
+                    .font(.title3.weight(.semibold))
+                    .contentTransition(.opacity)
+            } else {
+                // Placeholder bars shaped like the summary while it's being written.
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("Aphid levels across your fields this week")
+                        .font(.title3.weight(.semibold))
+                    Text("Infestation rate over the past seven days compared with the week before.")
+                        .font(.subheadline)
+                    Text("Leaves scanned and how many showed aphid damage.")
                         .font(.subheadline)
                 }
+                .redacted(reason: .placeholder)
+                .accessibilityLabel("Summarizing your scans")
             }
 
             VStack(alignment: .leading, spacing: 8) {
@@ -504,45 +570,18 @@ private struct HighlightsCard: View {
                     }
                 }
             }
-
-            if let recommendation = content.recommendation {
-                Label {
-                    Text(recommendation)
-                        .font(.subheadline)
-                        .fixedSize(horizontal: false, vertical: true)
-                } icon: {
-                    Image(systemName: "lightbulb.fill")
-                        .foregroundStyle(.yellow)
-                }
-                .padding(12)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(.fill.quaternary, in: .rect(cornerRadius: 14))
-            }
-
-            Text(footnote)
-                .font(.caption2)
-                .foregroundStyle(.tertiary)
         }
         .padding()
         .frame(maxWidth: .infinity, alignment: .leading)
-        .cardSurface(isGlass: horizontalSizeClass == .regular)
+        .glassEffect(.regular, in: .rect(cornerRadius: 24))
         .animation(.smooth, value: content)
+        .animation(.smooth, value: isAI)
     }
+}
 
-    private var footnote: String {
-        switch narrator.phase {
-        case .generating:
-            "Summarizing with Apple Intelligence on this device."
-        case .generated:
-            "Summarized with Apple Intelligence on this device \(narrator.generatedAt.map { $0.formatted(.relative(presentation: .named)) } ?? "just now"). Updates when new scans arrive. Check guidance with your local agriculturist."
-        case .unavailable(let reason):
-            "\(reason) Showing standard highlights."
-        case .failed:
-            "Couldn't generate a summary. Showing standard highlights."
-        case .idle:
-            "Standard highlights from your scan statistics."
-        }
-    }
+extension Color {
+    /// Warm amber for highlights: insight, not alarm.
+    static let highlight = Color(red: 0.93, green: 0.6, blue: 0.13)
 }
 
 private extension InsightNarrator.Phase {
