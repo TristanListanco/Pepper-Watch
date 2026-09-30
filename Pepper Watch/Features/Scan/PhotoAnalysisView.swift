@@ -92,6 +92,7 @@ struct PhotoAnalysisView: View {
         event.imageData = encoded.image
         event.thumbnailData = encoded.thumbnail
         modelContext.insert(event)
+        AppNavigator.shared.noteNewScan()
         event.field = field
         event.boxes = analysis.detections.map(BoundingBox.init)
         try? modelContext.save()

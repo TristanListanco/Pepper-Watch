@@ -126,6 +126,8 @@ private struct FieldSummaryView: View {
                     .minimumScaleFactor(0.6)
                     .contentTransition(.numericText())
                     .foregroundStyle(accent)
+                    // Tinted and clear Home Screens show it in the accent tint.
+                    .widgetAccentable()
                 SeverityTag(severity: window.severity, iconColor: accent)
                 Text(lastScan)
                     .font(.caption2)
@@ -170,6 +172,7 @@ private struct WeekBars: View {
                         Capsule()
                             .fill(counts[day] == nil ? AnyShapeStyle(.white.opacity(0.25)) : AnyShapeStyle(accent))
                             .frame(height: height)
+                            .widgetAccentable(counts[day] != nil)
                             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
                     }
                     Text(day.formatted(.dateTime.weekday(.narrow)))
@@ -268,6 +271,8 @@ struct FieldActionsWidgetView: View {
                 .lineLimit(1)
         }
         .font(.caption.weight(.semibold))
+        // While a ‹ › tap is being handled, the system shows this as updating.
+        .invalidatableContent()
     }
 
     private func rate(_ window: WidgetSnapshot.WindowSummary) -> some View {
@@ -277,8 +282,10 @@ struct FieldActionsWidgetView: View {
                 .minimumScaleFactor(0.6)
                 .contentTransition(.numericText())
                 .foregroundStyle(isDark ? WidgetPalette.accent(for: window.severity) : .white)
+                .widgetAccentable()
             SeverityTag(severity: window.severity, iconColor: isDark ? WidgetPalette.accent(for: window.severity) : .white)
         }
+        .invalidatableContent()
     }
 
     private var pager: some View {
@@ -295,6 +302,7 @@ struct FieldActionsWidgetView: View {
             Text("\(min(index, options.count - 1) + 1) of \(options.count)")
                 .font(.caption2.weight(.semibold).monospacedDigit())
                 .frame(maxWidth: .infinity)
+                .invalidatableContent()
 
             Button(intent: CycleFieldIntent(forward: true)) {
                 Image(systemName: "chevron.right")
@@ -311,7 +319,8 @@ struct FieldActionsWidgetView: View {
         Label(title, systemImage: systemImage)
             .font(.subheadline.weight(.semibold))
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-            .background(controlFill, in: .rect(cornerRadius: 14))
+            // Corners concentric with the widget's, at any size.
+            .background(controlFill, in: ContainerRelativeShape())
     }
 }
 

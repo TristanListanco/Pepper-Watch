@@ -5,6 +5,7 @@
 //  Created by Tristan Listanco on 9/29/26.
 //
 
+import AppIntents
 import SwiftData
 import SwiftUI
 
@@ -15,11 +16,41 @@ struct Pepper_WatchApp: App {
         PepperWatchTips.configure()
         // Activate WatchConnectivity at launch, including background launches the watch triggers.
         AppServices.shared.watchSync.start()
+        // The Scan Leaves control's intent runs here and opens the Scan tab.
+        AppDependencyManager.shared.add(dependency: ScannerLauncher { AppNavigator.shared.startScanning(fieldID: nil) })
     }
 
     var body: some Scene {
         WindowGroup {
             AppRootView()
+        }
+        // The iPadOS menu bar, and keyboard shortcuts with a hardware keyboard.
+        .commands { PepperWatchCommands() }
+        // Daily upkeep scheduled with BGTaskScheduler (see AppMaintenance).
+        .backgroundTask(.appRefresh(AppMaintenance.refreshTaskID)) {
+            await MainActor.run { AppMaintenance.run() }
+        }
+    }
+}
+
+/// File › New Field and a Go menu for the tabs, with shortcuts.
+struct PepperWatchCommands: Commands {
+    var body: some Commands {
+        CommandGroup(replacing: .newItem) {
+            Button("New Field", systemImage: "plus") {
+                AppNavigator.shared.requestNewField()
+            }
+            .keyboardShortcut("n")
+        }
+        CommandMenu("Go") {
+            Button("Scan", systemImage: "camera.viewfinder") { AppNavigator.shared.selectedTab = .scan }
+                .keyboardShortcut("1")
+            Button("Insights", systemImage: "chart.bar.xaxis") { AppNavigator.shared.selectedTab = .insights }
+                .keyboardShortcut("2")
+            Button("History", systemImage: "square.grid.2x2") { AppNavigator.shared.selectedTab = .history }
+                .keyboardShortcut("3")
+            Button("Developer", systemImage: "hammer") { AppNavigator.shared.selectedTab = .developer }
+                .keyboardShortcut("4")
         }
     }
 }
@@ -81,8 +112,11 @@ struct AppRootView: View {
             .task { services.widgetSync.start() }
             .task { services.metrics.start() }
             .onChange(of: scenePhase) { _, phase in
-                // Make sure widgets have the latest numbers when the user leaves the app.
-                if phase == .background { services.widgetSync.update() }
+                guard phase == .background else { return }
+                // Make sure widgets have the latest numbers when the user leaves the app,
+                // and keep tomorrow's upkeep scheduled.
+                services.widgetSync.update()
+                AppMaintenance.scheduleRefresh()
             }
     }
 }

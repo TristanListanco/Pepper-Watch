@@ -111,7 +111,8 @@ final class DetectionEngine {
     }
 
     /// Times repeated inferences on a synthetic 640×640 frame (after warm-up runs).
-    func runBenchmark(iterations: Int = 50) async throws -> BenchmarkResult? {
+    /// `progress` is called with the number of timed runs finished so far.
+    func runBenchmark(iterations: Int = 50, progress: (Int) -> Void = { _ in }) async throws -> BenchmarkResult? {
         guard let detector, let units = activeComputeUnits else { return nil }
         let image = Self.syntheticImage()
         for _ in 0..<3 { _ = try await detector.detect(in: image) }
@@ -123,6 +124,7 @@ final class DetectionEngine {
             let start = clock.now
             _ = try await detector.detect(in: image)
             latencies.append(start.duration(to: clock.now) / .milliseconds(1))
+            progress(latencies.count)
         }
         let result = BenchmarkResult(latenciesMs: latencies, computeUnits: units)
         logger?.log(

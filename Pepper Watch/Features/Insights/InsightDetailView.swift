@@ -64,6 +64,8 @@ struct InsightDetailView: View {
                 Button(isPinned ? "Unpin" : "Pin", systemImage: isPinned ? "pin.fill" : "pin") {
                     withAnimation { pinnedRaw = PinnedMetrics.toggling(metric, in: pinnedRaw) }
                 }
+                .contentTransition(.symbolEffect(.replace))
+                .symbolEffect(.bounce, value: isPinned)
             }
         }
         .sensoryFeedback(.selection, trigger: isPinned)

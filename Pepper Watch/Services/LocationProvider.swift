@@ -27,6 +27,10 @@ final class LocationProvider {
 
     @ObservationIgnored private var updatesTask: Task<Void, Never>?
     @ObservationIgnored private var serviceSession: CLServiceSession?
+    /// Asks for temporary precise location while scanning when Precise Location is off (iOS 14's
+    /// temporary full accuracy, requested through a service session).
+    @ObservationIgnored private var preciseSession: CLServiceSession?
+    private static let fullAccuracyPurpose = "FieldVerification"
     @ObservationIgnored private var lastGeocodedLocation: CLLocation?
 
     /// Publish thresholds: field boundaries are tens of meters, so smaller changes are noise.
@@ -58,6 +62,15 @@ final class LocationProvider {
         updatesTask = nil
         serviceSession?.invalidate()
         serviceSession = nil
+        preciseSession?.invalidate()
+        preciseSession = nil
+    }
+
+    /// Shows the system prompt for precise location until the app goes to the background, so
+    /// scans can be checked against a field's boundary even with Precise Location off.
+    func requestPreciseLocation() {
+        preciseSession?.invalidate()
+        preciseSession = CLServiceSession(authorization: .whenInUse, fullAccuracyPurposeKey: Self.fullAccuracyPurpose)
     }
 
     private func handle(_ update: CLLocationUpdate) {
@@ -84,8 +97,9 @@ final class LocationProvider {
     }
 
     /// Pull to refresh: waits briefly for a fresh fix, then looks up the place name again.
-    func refresh(timeout: Duration = .seconds(4)) async {
-        guard !isDenied else { return }
+    /// `force` tries even after a denial, for a location button that just granted one-time access.
+    func refresh(timeout: Duration = .seconds(4), force: Bool = false) async {
+        guard force || !isDenied else { return }
         if let fix = await Self.freshLocation(timeout: timeout) {
             lastLocation = fix
         }

@@ -14,6 +14,8 @@ enum AppTab: String, Hashable {
 
 struct ContentView: View {
     @Bindable private var navigator = AppNavigator.shared
+    /// The tab each window was on, restored on the next launch (iOS 14 scene storage).
+    @SceneStorage("selectedTab") private var restoredTab: AppTab = .scan
 
     var body: some View {
         TabView(selection: $navigator.selectedTab) {
@@ -26,6 +28,7 @@ struct ContentView: View {
             Tab("History", systemImage: "square.grid.2x2", value: .history) {
                 HistoryView()
             }
+            .badge(navigator.unseenScans)
             Tab("Developer", systemImage: "hammer", value: .developer) {
                 DeveloperView()
             }
@@ -34,9 +37,23 @@ struct ContentView: View {
         .tabViewStyle(.sidebarAdaptable)
         .tabBarMinimizeBehavior(.onScrollDown)
         // MapKit resets the window tint to system blue; pin the brand green explicitly.
-        .tint(Color("AccentColor"))
+        .tint(Color(.accent))
         // Widget taps arrive as pepperwatch:// links.
         .onOpenURL { navigator.open($0) }
+        .onChange(of: navigator.selectedTab) { _, tab in
+            if tab == .history { navigator.markHistorySeen() }
+            restoredTab = tab
+        }
+        .onAppear {
+            // Reopen on the last tab, unless a widget, Siri or a debug argument already chose one;
+            // then that tab becomes the one to come back to.
+            if navigator.hasPendingNavigation {
+                restoredTab = navigator.selectedTab
+            } else {
+                navigator.selectedTab = restoredTab
+            }
+            if navigator.selectedTab == .history { navigator.markHistorySeen() }
+        }
     }
 }
 
