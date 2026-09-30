@@ -27,8 +27,6 @@ struct FieldsHomeView: View {
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @Query(sort: \DetectionEvent.timestamp, order: .reverse) private var events: [DetectionEvent]
     @State private var pendingDeletion: Field?
-    @State private var renaming: Field?
-    @State private var draftName = ""
 
     /// Latest scan and scan count per field, recomputed whenever an event is inserted or deleted.
     private var activity: [UUID: FieldActivity] {
@@ -89,18 +87,10 @@ struct FieldsHomeView: View {
                             )
                         }
                         .buttonStyle(.plain)
-                        .contextMenu {
-                            Button("Scan", systemImage: "camera.viewfinder") { onScan(field) }
-                            Button("Rename", systemImage: "character.cursor.ibeam") { startRenaming(field) }
-                            Button("Edit Field", systemImage: "pencil") { onEdit(field) }
-                            Button("Directions", systemImage: "figure.walk") { PlaceNamer.openDirections(to: field.region) }
-                            Divider()
-                            Button("Delete Field", systemImage: "trash", role: .destructive) { pendingDeletion = field }
-                        }
                         // Swipe a card for quick actions, outside a List (iOS 27).
                         .swipeActions(edge: .trailing) {
                             Button("Delete", systemImage: "trash", role: .destructive) { pendingDeletion = field }
-                            Button("Rename", systemImage: "character.cursor.ibeam") { startRenaming(field) }
+                            Button("Edit", systemImage: "pencil") { onEdit(field) }
                                 .tint(.gray)
                         }
                         .swipeActions(edge: .leading) {
@@ -121,15 +111,6 @@ struct FieldsHomeView: View {
             ToolbarItem(placement: .primaryAction) {
                 Button("New Field", systemImage: "plus", action: onNewField)
             }
-        }
-        .alert("Rename Field", isPresented: Binding(get: { renaming != nil }, set: { if !$0 { renaming = nil } })) {
-            TextField("Name", text: $draftName)
-                .textInputAutocapitalization(.words)
-            Button("Cancel", role: .cancel) { renaming = nil }
-            Button("Save") { saveRename() }
-                .disabled(draftName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-        } message: {
-            Text("The new name shows everywhere, including past scans and widgets.")
         }
         .confirmationDialog(
             "Delete \(pendingDeletion?.name ?? "field")?",
@@ -244,21 +225,6 @@ struct FieldsHomeView: View {
         await location.refresh()
         await geofence.sync(fields.map(\.region))
         widgetSync?.update()
-    }
-
-    private func startRenaming(_ field: Field) {
-        draftName = field.name
-        renaming = field
-    }
-
-    private func saveRename() {
-        guard let field = renaming else { return }
-        let oldName = field.name
-        if field.rename(to: draftName), field.name != oldName {
-            try? modelContext.save()
-            logger?.log(category: "field", "Renamed \(oldName) to \(field.name)")
-        }
-        renaming = nil
     }
 
     private func delete(_ field: Field, includingScans: Bool) {

@@ -16,6 +16,7 @@ struct ScanView: View {
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.openURL) private var openURL
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     @AppStorage(SettingsKey.showLabels) private var showLabels = true
     @AppStorage(SettingsKey.showConfidence) private var showConfidence = true
@@ -27,12 +28,14 @@ struct ScanView: View {
     @State private var photoItem: PhotosPickerItem?
     @State private var photoAnalysis: PhotoAnalysis?
     @State private var isAnalyzingPhoto = false
-    @State private var showGuidance = false
     @State private var isVisible = false
     @State private var flashOpacity = 0.0
     @Namespace private var glassNamespace
 
     private var isActive: Bool { isVisible && scenePhase == .active }
+
+    /// iPad keeps its controls in a rail on the side, like the Camera app.
+    private var usesSideRail: Bool { horizontalSizeClass == .regular }
 
     /// Saves a new name as soon as renaming ends; blank names are ignored.
     private var nameBinding: Binding<String> {
@@ -57,6 +60,17 @@ struct ScanView: View {
         .toolbarBackground(.hidden, for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
         .toolbar(.hidden, for: .tabBar)
+        .toolbar {
+            if scanner.capabilities.hasTorch {
+                ToolbarItem(placement: .topBarTrailing) {
+                    Button(scanner.isTorchOn ? "Turn Off Light" : "Turn On Light", systemImage: scanner.isTorchOn ? "flashlight.on.fill" : "flashlight.off.fill") {
+                        scanner.toggleTorch()
+                    }
+                }
+            }
+        }
+        // White glass controls stay legible over any leaves; the accent green blended into them.
+        .tint(.white)
         .onAppear { isVisible = true }
         .onDisappear {
             isVisible = false
@@ -84,22 +98,7 @@ struct ScanView: View {
         }
         .sheet(item: $photoAnalysis) { analysis in
             PhotoAnalysisView(analysis: analysis, field: field)
-        }
-        .sheet(isPresented: $showGuidance) {
-            NavigationStack {
-                ScrollView {
-                    RecommendationCard(severity: scanner.stableSeverity ?? .clear)
-                        .padding()
-                }
-                .navigationTitle("Field Guidance")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button("Done", systemImage: "checkmark") { showGuidance = false }
-                    }
-                }
-            }
-            .presentationDetents([.medium, .large])
+                .tint(Color("AccentColor"))
         }
     }
 
@@ -152,12 +151,25 @@ struct ScanView: View {
         }
         .ignoresSafeArea()
         .overlay(alignment: .top) { topBar.padding(.horizontal) }
-        .overlay(alignment: .bottom) {
-            // Keep controls within reach and readable on iPad instead of spanning the full width.
-            bottomPanel
-                .frame(maxWidth: 640)
+        .overlay(alignment: usesSideRail ? .bottomLeading : .bottom) {
+            if usesSideRail {
+                statusStack
+                    .frame(maxWidth: 420, alignment: .leading)
+                    .padding(24)
+            } else {
+                VStack(spacing: 18) {
+                    statusStack
+                    bottomControls
+                }
                 .padding(.horizontal)
                 .padding(.bottom, 8)
+            }
+        }
+        .overlay(alignment: .trailing) {
+            if usesSideRail {
+                sideRail
+                    .padding(.trailing, 28)
+            }
         }
         .overlay {
             if scanner.status == .starting || engine.state == .loading {
@@ -173,12 +185,14 @@ struct ScanView: View {
                         .padding(.horizontal, 8)
                         .padding(.vertical, 6)
                 }
-                .buttonStyle(.glassProminent)
+                .buttonStyle(.glass)
                 .popoverTip(StartDetectingTip())
                 .transition(.scale.combined(with: .opacity))
             }
         }
         .animation(.smooth, value: scanner.isPaused)
+        // Controls over the camera always use dark glass with white text.
+        .environment(\.colorScheme, .dark)
     }
 
     private var topBar: some View {
@@ -190,10 +204,8 @@ struct ScanView: View {
 
                 Spacer()
 
-                VStack(alignment: .trailing, spacing: 8) {
-                    if showPerformanceHUD, scanner.status == .running {
-                        performanceChip
-                    }
+                if showPerformanceHUD, scanner.status == .running {
+                    performanceChip
                 }
             }
         }
@@ -220,9 +232,12 @@ struct ScanView: View {
         .accessibilityLabel("\(scanner.fps.fixed(0)) frames per second, \(scanner.inferenceMs.fixed(0)) milliseconds per inference")
     }
 
-    private var bottomPanel: some View {
-        GlassEffectContainer(spacing: 16) {
-            VStack(spacing: 14) {
+    // MARK: - Status
+
+    /// Banners when something needs attention, then the two leaf counters.
+    private var statusStack: some View {
+        GlassEffectContainer(spacing: 12) {
+            VStack(alignment: usesSideRail ? .leading : .center, spacing: 12) {
                 if let status = scanner.geofenceStatus, status.presence == .outside {
                     outsideFieldBanner(status)
                 }
@@ -230,9 +245,12 @@ struct ScanView: View {
                     lensBanner
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
-                guidancePanel
-                controls
+                HStack(spacing: 10) {
+                    LeafCounter(leafClass: .aphidInfested, count: scanner.summary.aphidCount)
+                    LeafCounter(leafClass: .healthy, count: scanner.summary.healthyCount)
+                }
             }
+            .frame(maxWidth: 640, alignment: usesSideRail ? .leading : .center)
             .animation(.smooth, value: scanner.isLensSmudged)
         }
     }
@@ -295,84 +313,85 @@ struct ScanView: View {
         .transition(.move(edge: .bottom).combined(with: .opacity))
     }
 
-    private var guidancePanel: some View {
-        Button {
-            showGuidance = true
-        } label: {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack {
-                    SeverityBadge(severity: scanner.stableSeverity, compact: true)
-                    Text(scanner.stableSeverity?.headline ?? "Point the camera at bell pepper leaves")
-                        .font(.subheadline.weight(.semibold))
-                        .lineLimit(1)
-                    Spacer(minLength: 0)
-                    Image(systemName: "chevron.up")
-                        .font(.caption.weight(.bold))
-                        .foregroundStyle(.secondary)
-                }
-                HStack(spacing: 18) {
-                    ClassCountLabel(leafClass: .aphidInfested, count: scanner.summary.aphidCount)
-                    ClassCountLabel(leafClass: .healthy, count: scanner.summary.healthyCount)
-                    Spacer(minLength: 0)
-                    VStack(alignment: .trailing, spacing: 0) {
-                        Text(scanner.summary.infestationRate.percentText)
-                            .font(.title3.weight(.bold).monospacedDigit())
-                            .contentTransition(.numericText(value: scanner.summary.infestationRate))
-                        Text("infested")
-                            .font(.caption2)
-                            .foregroundStyle(.secondary)
-                    }
-                }
+    // MARK: - Controls
+
+    /// iPhone: zoom above a row of library, shutter and pause, like the Camera app.
+    private var bottomControls: some View {
+        VStack(spacing: 16) {
+            if scanner.capabilities.zoomPresets.count > 1 {
+                zoomPresets(axis: .horizontal)
             }
-            .padding(14)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .contentShape(.rect)
+            HStack {
+                photoPickerButton(label: nil)
+                Spacer()
+                shutterButton
+                Spacer()
+                pauseButton
+            }
+            .padding(.horizontal, 24)
         }
-        .buttonStyle(.plain)
-        .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 22))
-        .animation(.smooth, value: scanner.summary)
-        .accessibilityHint("Shows treatment guidance")
     }
 
-    private var controls: some View {
-        HStack(spacing: 14) {
+    /// iPad: the same controls down the trailing edge, shutter in the middle.
+    private var sideRail: some View {
+        VStack(spacing: 28) {
+            pauseButton
+            if scanner.capabilities.zoomPresets.count > 1 {
+                zoomPresets(axis: .vertical)
+            }
+            shutterButton
             photoPickerButton(label: nil)
-
-            CircleGlassButton(
-                title: scanner.isPaused ? "Start Detecting" : "Pause Detecting",
-                systemImage: scanner.isPaused ? "play.fill" : "pause.fill"
-            ) {
-                if scanner.isPaused { startDetecting() } else { scanner.togglePause() }
-            }
-
-            CircleGlassButton(title: "Capture Snapshot", systemImage: "camera.shutter.button.fill", diameter: 56, isProminent: true) {
-                scanner.captureSnapshot()
-            }
-            .disabled(scanner.status != .running || scanner.isPaused || scanner.isLoggingBlockedByGeofence)
-            .popoverTip(SnapshotTip())
-
-            CircleGlassButton(
-                title: scanner.isTorchOn ? "Turn Off Light" : "Turn On Light",
-                systemImage: scanner.isTorchOn ? "flashlight.on.fill" : "flashlight.off.fill"
-            ) {
-                scanner.toggleTorch()
-            }
-            .disabled(!scanner.capabilities.hasTorch)
-
-            Button {
-                let presets = scanner.capabilities.zoomPresets
-                let index = presets.firstIndex(of: scanner.zoom) ?? 0
-                scanner.setZoom(presets[(index + 1) % presets.count])
-            } label: {
-                Text(scanner.zoom == 0.5 ? ".5×" : "\(Int(scanner.zoom))×")
-                    .font(.subheadline.weight(.bold).monospacedDigit())
-                    .frame(width: 36, height: 36)
-            }
-            .buttonStyle(.glass)
-            .buttonBorderShape(.circle)
-            .disabled(scanner.capabilities.zoomPresets.count < 2)
-            .accessibilityLabel("Zoom \(scanner.zoom.fixed(1)) times")
         }
+    }
+
+    private var shutterButton: some View {
+        ShutterButton {
+            scanner.captureSnapshot()
+        }
+        .disabled(scanner.status != .running || scanner.isPaused || scanner.isLoggingBlockedByGeofence)
+        .popoverTip(SnapshotTip())
+    }
+
+    private var pauseButton: some View {
+        Button {
+            if scanner.isPaused { startDetecting() } else { scanner.togglePause() }
+        } label: {
+            Image(systemName: scanner.isPaused ? "play.fill" : "pause.fill")
+                .font(.title3)
+                .frame(width: 44, height: 44)
+                .contentTransition(.symbolEffect(.replace))
+        }
+        .accessibilityLabel(scanner.isPaused ? "Start Detecting" : "Pause Detecting")
+        .buttonStyle(.glass)
+        .buttonBorderShape(.circle)
+        .disabled(scanner.status != .running)
+    }
+
+    /// Tap a lens preset directly; the selected one reads "2×", the others just "2".
+    private func zoomPresets(axis: Axis) -> some View {
+        let layout = axis == .horizontal ? AnyLayout(HStackLayout(spacing: 2)) : AnyLayout(VStackLayout(spacing: 2))
+        return layout {
+            ForEach(scanner.capabilities.zoomPresets, id: \.self) { preset in
+                let isSelected = preset == scanner.zoom
+                let number = preset == 0.5 ? ".5" : preset.formatted(.number.precision(.fractionLength(0...1)))
+                Button {
+                    scanner.setZoom(preset)
+                } label: {
+                    Text(isSelected ? "\(number)×" : number)
+                        .font(.system(size: isSelected ? 13 : 11, weight: .bold).monospacedDigit())
+                        .frame(width: 36, height: 36)
+                        .background(isSelected ? AnyShapeStyle(.white.opacity(0.22)) : AnyShapeStyle(.clear), in: .circle)
+                        .contentShape(.circle)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Zoom \(number) times")
+                .accessibilityAddTraits(isSelected ? .isSelected : [])
+            }
+        }
+        .foregroundStyle(.white)
+        .padding(3)
+        .glassEffect(.regular.interactive(), in: .capsule)
+        .animation(.smooth(duration: 0.2), value: scanner.zoom)
     }
 
     private func startDetecting() {
@@ -394,7 +413,7 @@ struct ScanView: View {
                     }
                 }
                 .font(.title3)
-                .frame(width: 36, height: 36)
+                .frame(width: 44, height: 44)
                 .accessibilityLabel("Analyze a photo")
             }
         }
@@ -427,27 +446,60 @@ struct ScanView: View {
     }
 }
 
-private struct CircleGlassButton: View {
-    let title: String
-    let systemImage: String
-    var diameter: CGFloat = 36
-    var isProminent = false
+/// A white shutter like the Camera app's: a ring around a disc that shrinks while pressed.
+private struct ShutterButton: View {
     let action: () -> Void
+    @Environment(\.isEnabled) private var isEnabled
 
     var body: some View {
-        let button = Button(action: action) {
-            Image(systemName: systemImage)
-                .font(isProminent ? .title : .title3)
-                .frame(width: diameter, height: diameter)
+        Button(action: action) {
+            ZStack {
+                Circle()
+                    .strokeBorder(.white, lineWidth: 4)
+                    .frame(width: 74, height: 74)
+                Circle()
+                    .fill(.white)
+                    .frame(width: 60, height: 60)
+            }
+            .opacity(isEnabled ? 1 : 0.45)
+            .contentShape(.circle)
         }
-        .buttonBorderShape(.circle)
-        .accessibilityLabel(title)
+        .buttonStyle(ShutterPressStyle())
+        .accessibilityLabel("Capture Snapshot")
+    }
 
-        if isProminent {
-            button.buttonStyle(.glassProminent)
-        } else {
-            button.buttonStyle(.glass)
+    private struct ShutterPressStyle: ButtonStyle {
+        func makeBody(configuration: Configuration) -> some View {
+            configuration.label
+                .scaleEffect(configuration.isPressed ? 0.9 : 1)
+                .animation(.smooth(duration: 0.15), value: configuration.isPressed)
         }
+    }
+}
+
+/// One class's count on glass: white text, with the class color as a small dot for identity.
+private struct LeafCounter: View {
+    let leafClass: LeafClass
+    let count: Int
+
+    var body: some View {
+        HStack(spacing: 7) {
+            Circle()
+                .fill(leafClass.color)
+                .frame(width: 9, height: 9)
+            Text(count, format: .number)
+                .font(.headline.monospacedDigit())
+                .contentTransition(.numericText(value: Double(count)))
+            Text(leafClass.shortName)
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+        .foregroundStyle(.white)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 9)
+        .glassEffect(.regular, in: .capsule)
+        .animation(.smooth, value: count)
+        .accessibilityElement(children: .combine)
     }
 }
 
