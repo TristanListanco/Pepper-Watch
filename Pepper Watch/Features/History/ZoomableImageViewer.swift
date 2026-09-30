@@ -4,40 +4,34 @@
 //
 
 import SwiftUI
+import UIKit
 
-/// Full-screen photo viewer: pinch to zoom, drag to pan, double-tap to toggle zoom.
+/// Full-screen photo viewer with the system's zooming, as in Photos: pinch zooms around your
+/// fingers, double-tap zooms in where you tap, and pulling down at full size closes the viewer.
 struct ZoomableImageViewer: View {
     let imageData: Data?
     let detections: [Detection]
 
     @Environment(\.dismiss) private var dismiss
-    @State private var scale: CGFloat = 1
-    @State private var committedScale: CGFloat = 1
-    @State private var offset: CGSize = .zero
-    @State private var committedOffset: CGSize = .zero
+    @State private var image: UIImage?
+    /// The photo with its boxes drawn in at full resolution, so they stay sharp when zoomed.
+    @State private var annotated: UIImage?
     @State private var showsBoxes = true
-
-    private static let scaleRange: ClosedRange<CGFloat> = 1...6
+    @State private var zoomScale: CGFloat = 1
 
     var body: some View {
-        GeometryReader { geometry in
-            AnnotatedImageView(imageData: imageData, detections: showsBoxes ? detections : [])
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .scaleEffect(scale)
-                .offset(offset)
-                .gesture(magnification(in: geometry.size))
-                .simultaneousGesture(pan(in: geometry.size))
-                .onTapGesture(count: 2) {
-                    withAnimation(.smooth) {
-                        if scale > 1 {
-                            reset()
-                        } else {
-                            scale = 2.5
-                            committedScale = 2.5
-                        }
-                    }
-                }
+        GeometryReader { proxy in
+            ZoomingImageView(
+                image: showsBoxes ? annotated ?? image : image,
+                zoomScale: $zoomScale,
+                onPullDown: { dismiss() }
+            )
+            .task(id: proxy.size) {
+                if image == nil, let imageData { image = UIImage(data: imageData) }
+                if let image { annotated = annotatedImage(image, fitting: proxy.size) }
+            }
         }
+        .ignoresSafeArea()
         .background(Color.black.ignoresSafeArea())
         .overlay(alignment: .top) {
             HStack {
@@ -47,78 +41,173 @@ struct ZoomableImageViewer: View {
                     .buttonBorderShape(.circle)
                 Spacer()
                 Button(showsBoxes ? "Hide Boxes" : "Show Boxes", systemImage: showsBoxes ? "square.dashed" : "square.dashed.inset.filled") {
-                    withAnimation { showsBoxes.toggle() }
+                    showsBoxes.toggle()
                 }
                 .buttonStyle(.glass)
             }
+            // White controls over the photo, as in Photos.
+            .tint(.white)
+            .environment(\.colorScheme, .dark)
             .padding()
         }
         .overlay(alignment: .bottom) {
-            if scale > 1 {
-                Text("\(Double(scale).fixed(1))×")
+            if zoomScale > 1.05 {
+                Text("\(Double(zoomScale).fixed(1))×")
                     .font(.caption.weight(.semibold).monospacedDigit())
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
                     .glassEffect(.regular, in: .capsule)
                     .padding(.bottom, 24)
+                    .transition(.opacity)
             }
         }
+        .animation(.smooth, value: zoomScale > 1.05)
         .statusBarHidden()
-        .accessibilityAction(named: "Zoom in") { withAnimation { scale = min(scale * 1.5, Self.scaleRange.upperBound); committedScale = scale } }
-        .accessibilityAction(named: "Zoom out") { withAnimation { scale = max(scale / 1.5, 1); committedScale = scale; if scale == 1 { reset() } } }
+        .accessibilityElement(children: .contain)
+        .accessibilityLabel("Photo")
     }
 
-    private func magnification(in size: CGSize) -> some Gesture {
-        MagnifyGesture()
-            .onChanged { value in
-                scale = min(max(committedScale * value.magnification, Self.scaleRange.lowerBound * 0.8), Self.scaleRange.upperBound)
-            }
-            .onEnded { _ in
-                withAnimation(.smooth) {
-                    if scale <= 1 {
-                        reset()
-                    } else {
-                        committedScale = scale
-                        offset = clamped(offset, in: size)
-                        committedOffset = offset
-                    }
-                }
-            }
+    /// Draws the boxes at the size the photo appears on screen, so labels and lines look as they do
+    /// elsewhere, but renders at the photo's own resolution.
+    private func annotatedImage(_ image: UIImage, fitting container: CGSize) -> UIImage? {
+        guard !detections.isEmpty, image.size.width > 0, container.width > 0 else { return nil }
+        let fit = min(container.width / image.size.width, container.height / image.size.height)
+        let displayed = CGSize(width: image.size.width * fit, height: image.size.height * fit)
+        let renderer = ImageRenderer(
+            content: Image(uiImage: image)
+                .resizable()
+                .overlay { DetectionOverlay(detections: detections, imageSize: image.size, contentMode: .fit) }
+                .frame(width: displayed.width, height: displayed.height)
+        )
+        renderer.scale = max(image.size.width * image.scale / displayed.width, 1)
+        return renderer.uiImage
+    }
+}
+
+/// A `UIScrollView` zooming an image view.
+private struct ZoomingImageView: UIViewRepresentable {
+    let image: UIImage?
+    @Binding var zoomScale: CGFloat
+    let onPullDown: () -> Void
+
+    func makeUIView(context: Context) -> ImageZoomView {
+        let view = ImageZoomView()
+        view.onZoom = { scale in zoomScale = scale }
+        view.onPullDown = onPullDown
+        return view
     }
 
-    private func pan(in size: CGSize) -> some Gesture {
-        DragGesture()
-            .onChanged { value in
-                guard scale > 1 else { return }
-                offset = CGSize(
-                    width: committedOffset.width + value.translation.width,
-                    height: committedOffset.height + value.translation.height
-                )
+    func updateUIView(_ view: ImageZoomView, context: Context) {
+        view.image = image
+    }
+}
+
+private final class ImageZoomView: UIScrollView, UIScrollViewDelegate {
+    var onZoom: ((CGFloat) -> Void)?
+    var onPullDown: (() -> Void)?
+
+    private let imageView = UIImageView()
+    private var laidOutSize: CGSize = .zero
+
+    var image: UIImage? {
+        get { imageView.image }
+        set {
+            let previousAspect = imageView.image.map { Self.aspect($0) }
+            imageView.image = newValue
+            // Showing or hiding boxes swaps in an image of the same shape; keep the zoom.
+            let newAspect = newValue.map { Self.aspect($0) }
+            if previousAspect == nil || newAspect == nil || previousAspect != newAspect {
+                layoutImage()
             }
-            .onEnded { value in
-                if scale <= 1 {
-                    // Swipe down to close when not zoomed.
-                    if value.translation.height > 120 { dismiss() }
-                    return
-                }
-                withAnimation(.smooth) {
-                    offset = clamped(offset, in: size)
-                    committedOffset = offset
-                }
-            }
+        }
     }
 
-    /// Keeps the zoomed image from being dragged entirely off screen.
-    private func clamped(_ proposed: CGSize, in size: CGSize) -> CGSize {
-        let maxX = size.width * (scale - 1) / 2
-        let maxY = size.height * (scale - 1) / 2
-        return CGSize(width: min(max(proposed.width, -maxX), maxX), height: min(max(proposed.height, -maxY), maxY))
+    init() {
+        super.init(frame: .zero)
+        delegate = self
+        minimumZoomScale = 1
+        maximumZoomScale = 6
+        bouncesZoom = true
+        // Lets a pull at full size bounce, so it can close the viewer.
+        alwaysBounceVertical = true
+        showsHorizontalScrollIndicator = false
+        showsVerticalScrollIndicator = false
+        contentInsetAdjustmentBehavior = .never
+        decelerationRate = .fast
+        backgroundColor = .clear
+
+        imageView.contentMode = .scaleAspectFit
+        imageView.accessibilityIgnoresInvertColors = true
+        addSubview(imageView)
+
+        let doubleTap = UITapGestureRecognizer(target: self, action: #selector(doubleTapped(_:)))
+        doubleTap.numberOfTapsRequired = 2
+        addGestureRecognizer(doubleTap)
     }
 
-    private func reset() {
-        scale = 1
-        committedScale = 1
-        offset = .zero
-        committedOffset = .zero
+    @available(*, unavailable)
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+
+    override func layoutSubviews() {
+        super.layoutSubviews()
+        if bounds.size != laidOutSize {
+            laidOutSize = bounds.size
+            layoutImage()
+        }
+    }
+
+    private static func aspect(_ image: UIImage) -> CGFloat {
+        image.size.height > 0 ? (image.size.width / image.size.height * 1000).rounded() : 0
+    }
+
+    /// Fits the image to the screen at 1×.
+    private func layoutImage() {
+        setZoomScale(minimumZoomScale, animated: false)
+        guard let size = imageView.image?.size, size.width > 0, size.height > 0, bounds.width > 0 else { return }
+        let fit = min(bounds.width / size.width, bounds.height / size.height)
+        let fitted = CGSize(width: size.width * fit, height: size.height * fit)
+        imageView.frame = CGRect(origin: .zero, size: fitted)
+        contentSize = fitted
+        centerImage()
+        // Layout can run inside a SwiftUI update; report the reset zoom after it.
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.onZoom?(self.zoomScale)
+        }
+    }
+
+    /// Keeps the image centered while it's smaller than the screen.
+    private func centerImage() {
+        let horizontal = max(0, (bounds.width - contentSize.width) / 2)
+        let vertical = max(0, (bounds.height - contentSize.height) / 2)
+        contentInset = UIEdgeInsets(top: vertical, left: horizontal, bottom: vertical, right: horizontal)
+    }
+
+    @objc private func doubleTapped(_ recognizer: UITapGestureRecognizer) {
+        if zoomScale > minimumZoomScale {
+            setZoomScale(minimumZoomScale, animated: true)
+        } else {
+            let point = recognizer.location(in: imageView)
+            let scale = min(2.5, maximumZoomScale)
+            let size = CGSize(width: bounds.width / scale, height: bounds.height / scale)
+            zoom(to: CGRect(x: point.x - size.width / 2, y: point.y - size.height / 2, width: size.width, height: size.height), animated: true)
+        }
+    }
+
+    // MARK: UIScrollViewDelegate
+
+    func viewForZooming(in scrollView: UIScrollView) -> UIView? { imageView }
+
+    func scrollViewDidZoom(_ scrollView: UIScrollView) {
+        centerImage()
+        onZoom?(zoomScale)
+    }
+
+    func scrollViewWillEndDragging(_ scrollView: UIScrollView, withVelocity velocity: CGPoint, targetContentOffset: UnsafeMutablePointer<CGPoint>) {
+        // A firm pull down at full size closes the viewer, like Photos.
+        let pulled = -(contentOffset.y + contentInset.top)
+        if zoomScale <= minimumZoomScale + 0.01, pulled > 90 || (pulled > 30 && velocity.y < -1) {
+            onPullDown?()
+        }
     }
 }

@@ -23,7 +23,7 @@ struct DeveloperView: View {
     @AppStorage(SettingsKey.showPerformanceHUD) private var showPerformanceHUD = true
     @AppStorage(SettingsKey.hapticsEnabled) private var hapticsEnabled = true
     @AppStorage(SettingsKey.autoLogEnabled) private var autoLogEnabled = true
-    @AppStorage(SettingsKey.autoLogInterval) private var autoLogInterval = 3.0
+    @AppStorage(SettingsKey.autoLogInterval) private var autoLogInterval = 10.0
     @AppStorage(SettingsKey.autoLogRequiresAphids) private var autoLogRequiresAphids = false
     @AppStorage(SettingsKey.geotagEnabled) private var geotagEnabled = true
     @AppStorage(SettingsKey.healthLogInterval) private var healthLogInterval = 30.0
@@ -369,6 +369,15 @@ private struct DataManagementSection: View {
     @Environment(\.systemLogger) private var logger
     @State private var isConfirmingErase = false
     @State private var storageBytes: Int64?
+    /// The export being prepared; its row shows a spinner until the share sheet opens.
+    @State private var preparing: ExportKind?
+    @State private var exportError: String?
+    /// Where each export row is on screen, for the share sheet's popover on iPad.
+    @State private var rowFrames: [ExportKind: CGRect] = [:]
+
+    private enum ExportKind: Hashable {
+        case detections, sessions, systemLog
+    }
 
     var body: some View {
         Section {
@@ -379,18 +388,9 @@ private struct DataManagementSection: View {
             LabeledContent("System log entries", value: logs.count.formatted())
             LabeledContent("Storage used", value: storageBytes.map { $0.formatted(.byteCount(style: .file)) } ?? "…")
 
-            ShareLink(item: CSVExporter.detections(events), preview: SharePreview("Detections CSV")) {
-                Label("Export Detections (CSV)", systemImage: "tablecells")
-            }
-            .disabled(events.isEmpty)
-            ShareLink(item: CSVExporter.sessions(sessions), preview: SharePreview("Sessions CSV")) {
-                Label("Export Sessions (CSV)", systemImage: "timer")
-            }
-            .disabled(sessions.isEmpty)
-            ShareLink(item: CSVExporter.systemLogs(logs), preview: SharePreview("System log CSV")) {
-                Label("Export System Log (CSV)", systemImage: "doc.text")
-            }
-            .disabled(logs.isEmpty)
+            exportButton(.detections, title: "Export Detections (CSV)", systemImage: "tablecells", isEmpty: events.isEmpty)
+            exportButton(.sessions, title: "Export Sessions (CSV)", systemImage: "timer", isEmpty: sessions.isEmpty)
+            exportButton(.systemLog, title: "Export System Log (CSV)", systemImage: "doc.text", isEmpty: logs.isEmpty)
 
             Button("Generate Demo Data", systemImage: "wand.and.stars") {
                 DemoDataGenerator.generate(in: modelContext)
@@ -417,6 +417,53 @@ private struct DataManagementSection: View {
             }
         } message: {
             Text("Deletes every field, scan, image, session and log entry. This can't be undone.")
+        }
+        .alert("Couldn't Export", isPresented: Binding(get: { exportError != nil }, set: { if !$0 { exportError = nil } })) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(exportError ?? "")
+        }
+    }
+
+    private func exportButton(_ kind: ExportKind, title: String, systemImage: String, isEmpty: Bool) -> some View {
+        Button {
+            export(kind)
+        } label: {
+            HStack {
+                Label(title, systemImage: systemImage)
+                Spacer()
+                if preparing == kind {
+                    ProgressView()
+                }
+            }
+            .contentShape(.rect)
+        }
+        .disabled(isEmpty || preparing != nil)
+        .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { rowFrames[kind] = $0 }
+        .accessibilityValue(preparing == kind ? "Preparing" : "")
+    }
+
+    /// Builds the CSV, writes it to a file and opens the share sheet, with a spinner meanwhile.
+    private func export(_ kind: ExportKind) {
+        guard preparing == nil else { return }
+        preparing = kind
+        Task {
+            // Let the spinner appear before the rows are read.
+            try? await Task.sleep(for: .milliseconds(120))
+            let document = switch kind {
+            case .detections: CSVExporter.detections(events)
+            case .sessions: CSVExporter.sessions(sessions)
+            case .systemLog: CSVExporter.systemLogs(logs)
+            }
+            do {
+                let url = try await document.writeToTemporaryFile()
+                preparing = nil
+                SharePresenter.present([url], from: rowFrames[kind])
+            } catch {
+                preparing = nil
+                exportError = error.localizedDescription
+                logger?.log(.error, category: "data", "Export failed: \(error.localizedDescription)")
+            }
         }
     }
 

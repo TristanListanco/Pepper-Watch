@@ -60,7 +60,8 @@ nonisolated enum AppSettings {
         SettingsKey.showPerformanceHUD: true,
         SettingsKey.hapticsEnabled: true,
         SettingsKey.autoLogEnabled: true,
-        SettingsKey.autoLogInterval: 3.0,
+        // Long enough that a scan of one row saves a handful of photos, not dozens.
+        SettingsKey.autoLogInterval: 10.0,
         SettingsKey.autoLogRequiresAphids: false,
         SettingsKey.geotagEnabled: true,
         SettingsKey.healthLogInterval: 30.0,
