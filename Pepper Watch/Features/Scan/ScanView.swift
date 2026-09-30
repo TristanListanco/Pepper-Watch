@@ -4,6 +4,7 @@
 //
 
 import PhotosUI
+import SwiftData
 import SwiftUI
 import TipKit
 
@@ -14,6 +15,7 @@ struct ScanView: View {
     @Environment(DetectionEngine.self) private var engine
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.openURL) private var openURL
+    @Environment(\.modelContext) private var modelContext
 
     @AppStorage(SettingsKey.showLabels) private var showLabels = true
     @AppStorage(SettingsKey.showConfidence) private var showConfidence = true
@@ -32,13 +34,25 @@ struct ScanView: View {
 
     private var isActive: Bool { isVisible && scenePhase == .active }
 
+    /// Saves a new name as soon as renaming ends; blank names are ignored.
+    private var nameBinding: Binding<String> {
+        Binding {
+            field.name
+        } set: { newName in
+            guard field.rename(to: newName) else { return }
+            try? modelContext.save()
+        }
+    }
+
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
             content
             Color.white.opacity(flashOpacity).ignoresSafeArea().allowsHitTesting(false)
         }
-        .navigationTitle(field.name)
+        // Tap the title to rename the field in place.
+        .navigationTitle(nameBinding)
+        .toolbarTitleMenu { RenameButton() }
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
