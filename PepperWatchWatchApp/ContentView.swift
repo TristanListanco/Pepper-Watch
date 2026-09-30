@@ -54,12 +54,7 @@ struct ContentView: View {
                 FieldListView(payload: payload, selection: $selection)
             } detail: {
                 if let status = payload.snapshot.fields.first(where: { $0.id == selection }) {
-                    InsightsPager(
-                        status: status,
-                        highlight: payload.highlights[status.id],
-                        validation: payload.validation?[status.id],
-                        trends: payload.trends?[status.id]
-                    )
+                    InsightsPager(status: status, trends: payload.trends?[status.id])
                         // Start at the summary whenever the field changes.
                         .id(status.id)
                 } else {

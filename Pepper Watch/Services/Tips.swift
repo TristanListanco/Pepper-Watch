@@ -36,7 +36,7 @@ struct SnapshotTip: Tip {
     @Parameter static var hasStartedDetecting: Bool = false
 
     var title: Text { Text("Save a snapshot") }
-    var message: Text? { Text("Detections are logged every few seconds. Tap the shutter to save the current frame yourself.") }
+    var message: Text? { Text("New leaves are logged automatically once the camera holds steady. Tap the shutter to save the current frame yourself.") }
     var image: Image? { Image(systemName: "camera.shutter.button") }
 
     var rules: [Rule] {
