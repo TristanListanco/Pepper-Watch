@@ -86,6 +86,19 @@ final class Field {
     var region: FieldRegion {
         FieldRegion(id: id, name: name, latitude: latitude, longitude: longitude, radiusMeters: radiusMeters)
     }
+
+    /// Renames the field and the name kept on its scans and sessions, so History, Insights and
+    /// reports all show the new name. Returns `false` for a blank name.
+    @discardableResult
+    func rename(to newName: String) -> Bool {
+        let trimmed = newName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return false }
+        guard trimmed != name else { return true }
+        name = trimmed
+        for event in events { event.fieldName = trimmed }
+        for session in sessions { session.fieldName = trimmed }
+        return true
+    }
 }
 
 /// Sendable snapshot of a field's geofence.
@@ -153,6 +166,9 @@ final class DetectionEvent {
     // Denormalized so dashboards can aggregate without faulting every box.
     var aphidCount: Int = 0
     var healthyCount: Int = 0
+    /// The scan's calendar day when it was logged, like "2026-09-26". Stored because History
+    /// sections its query by it, and SwiftData sections by persisted attributes only.
+    var dayKey: String = ""
 
     @Attribute(.externalStorage) var imageData: Data?
     @Attribute(.externalStorage) var thumbnailData: Data?
@@ -184,9 +200,25 @@ final class DetectionEvent {
         self.imageHeight = imageSize.height
         self.aphidCount = summary.aphidCount
         self.healthyCount = summary.healthyCount
+        self.dayKey = Self.dayKey(for: timestamp)
+    }
+
+    /// A date's calendar day in the device's time zone.
+    static func dayKey(for date: Date) -> String {
+        let day = Calendar.current.dateComponents([.year, .month, .day], from: date)
+        return String(format: "%04d-%02d-%02d", day.year ?? 0, day.month ?? 0, day.day ?? 0)
+    }
+
+    /// Fills in the day for scans saved before it was stored.
+    static func backfillDayKeys(in context: ModelContext) {
+        let missing = FetchDescriptor<DetectionEvent>(predicate: #Predicate { $0.dayKey == "" })
+        guard let events = try? context.fetch(missing), !events.isEmpty else { return }
+        for event in events { event.dayKey = dayKey(for: event.timestamp) }
+        try? context.save()
     }
 
     var source: EventSource { EventSource(rawValue: sourceRaw) ?? .snapshot }
+
     var summary: DetectionSummary { DetectionSummary(aphidCount: aphidCount, healthyCount: healthyCount) }
     var severity: Severity? { summary.severity }
     var imageSize: CGSize { CGSize(width: imageWidth, height: imageHeight) }

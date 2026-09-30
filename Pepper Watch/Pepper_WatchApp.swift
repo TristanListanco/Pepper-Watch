@@ -41,6 +41,7 @@ final class AppServices {
     private init() {
         container = AppDataStore.container
         let context = container.mainContext
+        DetectionEvent.backfillDayKeys(in: context)
 
         #if DEBUG
         // `-PWSeedDemo YES` fills an empty store with demo data for screenshots.

@@ -36,7 +36,7 @@ struct InsightDetailView: View {
                 Picker("Range", selection: $range.animation(.smooth)) {
                     ForEach(InsightsRange.allCases) { Text($0.rawValue).tag($0) }
                 }
-                .pickerStyle(.segmented)
+                .pickerStyle(.tabs)
                 .frame(maxWidth: isRegular ? 520 : .infinity)
                 .frame(maxWidth: .infinity)
 

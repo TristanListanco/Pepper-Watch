@@ -4,18 +4,22 @@
 //
 
 import Foundation
+import Observation
 import SwiftData
 import SwiftUI
 import WidgetKit
 
 /// Keeps the widget snapshot in the App Group container, and the paired Apple Watch, current.
-/// Updates are debounced after SwiftData saves so auto-logging while scanning doesn't reload
-/// widgets every frame.
+/// Follows the store's persistent history, so scans and fields saved from any context (the scanner,
+/// App Intents, photo imports) are picked up. Updates are debounced so auto-logging while scanning
+/// doesn't reload widgets every frame.
 final class WidgetSync {
     private let context: ModelContext
     private let watch: WatchSync?
     private var pendingUpdate: Task<Void, Never>?
     private var listener: Task<Void, Never>?
+    /// Counts committed changes to scans and fields (iOS 27).
+    private var historyObserver: HistoryObserver?
 
     init(context: ModelContext, watch: WatchSync? = nil) {
         self.context = context
@@ -24,9 +28,22 @@ final class WidgetSync {
 
     func start() {
         update()
-        listener = Task { [weak self] in
-            for await _ in NotificationCenter.default.notifications(named: ModelContext.didSave) {
-                self?.scheduleUpdate()
+        guard listener == nil else { return }
+        do {
+            // Only scans and fields change what widgets show; system log writes are ignored.
+            let observer = try HistoryObserver(observedModels: [DetectionEvent.self, Field.self], modelContainer: context.container)
+            historyObserver = observer
+            listener = Task { [weak self] in
+                // The first value is the current count; each later one follows a committed change.
+                for await _ in Observations({ observer.eventCounter }).dropFirst() {
+                    self?.scheduleUpdate()
+                }
+            }
+        } catch {
+            listener = Task { [weak self] in
+                for await _ in NotificationCenter.default.notifications(named: ModelContext.didSave) {
+                    self?.scheduleUpdate()
+                }
             }
         }
     }
