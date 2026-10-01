@@ -12,7 +12,9 @@ enum AppDataStore {
         do {
             return try ModelContainer(for: AppSchema.schema)
         } catch {
-            // Keep the app usable for a demo even if the on-disk store can't open.
+            // Keep the app usable for a demo even if the on-disk store can't open. An in-memory
+            // store with the app's own schema can't fail to open.
+            // swiftlint:disable:next force_try
             return try! ModelContainer(for: AppSchema.schema, configurations: ModelConfiguration(isStoredInMemoryOnly: true))
         }
     }()
