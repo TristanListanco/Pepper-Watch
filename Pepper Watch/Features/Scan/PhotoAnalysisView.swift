@@ -33,7 +33,7 @@ struct PhotoAnalysisView: View {
                 VStack(spacing: 16) {
                     Image(decorative: analysis.image, scale: 1)
                         .resizable()
-                        .aspectRatio(contentMode: .fit)
+                        .scaledToFit()
                         .overlay {
                             DetectionOverlay(detections: analysis.detections, imageSize: analysis.imageSize, contentMode: .fit)
                         }

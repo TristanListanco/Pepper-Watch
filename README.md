@@ -1,6 +1,7 @@
 # Pepper Watch
 
 [![Tests](https://github.com/TristanListanco/Pepper-Watch/actions/workflows/tests.yml/badge.svg?branch=main)](https://github.com/TristanListanco/Pepper-Watch/actions/workflows/tests.yml)
+[![Static Analysis](https://github.com/TristanListanco/Pepper-Watch/actions/workflows/static-analysis.yml/badge.svg?branch=main)](https://github.com/TristanListanco/Pepper-Watch/actions/workflows/static-analysis.yml)
 
 On-device aphid detection for bell pepper fields. The iPhone and iPad app scans leaves with a Core ML model and keeps every result on the device. A companion Apple Watch app and widgets show each field's status at a glance.
 
@@ -22,3 +23,12 @@ xcodebuild test -project "Pepper Watch.xcodeproj" -scheme PepperWatchWatchApp \
 ```
 
 The [Tests workflow](.github/workflows/tests.yml) runs both suites on every pull request and every push to `main`.
+
+## Static analysis
+
+Two layers check the code without running the app:
+
+- **SwiftLint** lints every target with the rules in [`.swiftlint.yml`](.swiftlint.yml). Install it with `brew install swiftlint` and run `swiftlint` from the repository root.
+- **`StaticAnalysisTests`**, a Swift Testing suite in `PepperWatchTests`, reads the Xcode project and the sources each target compiles. It checks that SF Symbol and asset names resolve, that every SwiftData model is in the schema, that privacy-protected APIs have usage descriptions, that entitlements work with a free developer account, and that shipped code has no `print` calls, leftover TODOs or plain-HTTP URLs. It runs with the other tests on ⌘U, and failures point at the offending line.
+
+The [Static Analysis workflow](.github/workflows/static-analysis.yml) runs SwiftLint in strict mode and shows findings inline on pull requests. The Tests workflow also fails on any compiler warning.

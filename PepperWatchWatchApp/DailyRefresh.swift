@@ -16,6 +16,8 @@ enum DailyRefresh {
     /// Asks for a run a little before the 6–10 AM scouting window; watchOS picks the exact time.
     /// Only one refresh can be pending, so this replaces any earlier request.
     static func schedule(now: Date = .now, calendar: Calendar = .current) {
+        // userInfo takes an NSSecureCoding object.
+        // swiftlint:disable:next legacy_objc_type
         WKApplication.shared().scheduleBackgroundRefresh(withPreferredDate: nextRun(after: now, calendar: calendar), userInfo: taskID as NSString) { _ in }
     }
 

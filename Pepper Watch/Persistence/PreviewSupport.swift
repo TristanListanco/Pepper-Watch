@@ -9,6 +9,7 @@ import SwiftData
 enum PreviewSupport {
     static let container: ModelContainer = {
         let schema = AppSchema.schema
+        // swiftlint:disable:next force_try
         let container = try! ModelContainer(for: schema, configurations: ModelConfiguration(isStoredInMemoryOnly: true))
         DemoDataGenerator.generate(in: container.mainContext, days: 14)
         return container

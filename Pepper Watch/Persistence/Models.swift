@@ -217,6 +217,8 @@ final class DetectionEvent {
 
     /// Fills in the day for scans saved before it was stored.
     static func backfillDayKeys(in context: ModelContext) {
+        // SwiftData translates a comparison with a literal into the store query.
+        // swiftlint:disable:next empty_string
         let missing = FetchDescriptor<DetectionEvent>(predicate: #Predicate { $0.dayKey == "" })
         guard let events = try? context.fetch(missing), !events.isEmpty else { return }
         for event in events { event.dayKey = dayKey(for: event.timestamp) }

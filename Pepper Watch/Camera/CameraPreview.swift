@@ -28,8 +28,10 @@ struct CameraPreview: UIViewRepresentable {
 }
 
 final class PreviewView: UIView {
-    override class var layerClass: AnyClass { AVCaptureVideoPreviewLayer.self }
+    override static var layerClass: AnyClass { AVCaptureVideoPreviewLayer.self }
 
+    // layerClass makes the backing layer a preview layer.
+    // swiftlint:disable:next force_cast
     var previewLayer: AVCaptureVideoPreviewLayer { layer as! AVCaptureVideoPreviewLayer }
     var onCaptureRotationChange: ((CGFloat) -> Void)?
 
