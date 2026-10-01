@@ -356,7 +356,7 @@ final class ScanModel {
     }
 
     /// The same view as the last saved frame: as many leaves, most of them in nearly the same place.
-    private static func showsSameLeaves(_ detections: [Detection], as previous: [Detection]) -> Bool {
+    static func showsSameLeaves(_ detections: [Detection], as previous: [Detection]) -> Bool {
         guard !previous.isEmpty, detections.count == previous.count else { return false }
         let matched = detections.filter { detection in
             previous.contains { $0.leafClass == detection.leafClass && $0.rect.intersectionOverUnion(with: detection.rect) >= 0.5 }
