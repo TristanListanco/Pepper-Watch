@@ -75,7 +75,7 @@ struct NavigationTests {
         let navigator = AppNavigator()
         navigator.open(.pepperWatch("insights", fieldID: WidgetSnapshot.allFieldsID))
         #expect(navigator.selectedTab == .insights)
-        #expect(navigator.pendingInsightsFieldID == "")
+        #expect(navigator.pendingInsightsFieldID?.isEmpty == true)
     }
 
     @Test func unknownLinksAreIgnored() {
