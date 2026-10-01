@@ -123,10 +123,11 @@ private nonisolated struct LeafColorSample {
         let red = Double(r) / 255, green = Double(g) / 255, blue = Double(b) / 255
         let maximum = max(red, green, blue), minimum = min(red, green, blue), delta = maximum - minimum
         guard delta > 0 else { return (0, 0, maximum) }
-        var hue: Double
-        if maximum == red { hue = (green - blue) / delta }
-        else if maximum == green { hue = 2 + (blue - red) / delta }
-        else { hue = 4 + (red - green) / delta }
+        var hue = switch maximum {
+        case red: (green - blue) / delta
+        case green: 2 + (blue - red) / delta
+        default: 4 + (red - green) / delta
+        }
         hue /= 6
         if hue < 0 { hue += 1 }
         return (hue, delta / maximum, maximum)

@@ -98,7 +98,7 @@ struct AnnotatedImageView: View {
         if let imageData, let image = UIImage(data: imageData) {
             Image(uiImage: image)
                 .resizable()
-                .aspectRatio(contentMode: .fit)
+                .scaledToFit()
                 .overlay {
                     DetectionOverlay(detections: detections, imageSize: image.size, contentMode: .fit, highlightedID: highlightedID)
                 }

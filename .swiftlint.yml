@@ -1,0 +1,72 @@
+# SwiftLint static analysis for every target. CI runs `swiftlint lint --strict`, so any warning
+# fails the build; run `swiftlint` from the repository root to check locally.
+#
+# Project-specific checks that SwiftLint can't express (SF Symbols, assets, privacy strings,
+# entitlements) live in PepperWatchTests/StaticAnalysisTests.swift.
+
+included:
+  - Pepper Watch
+  - Shared
+  - PepperWatchWidgets
+  - PepperWatchWatchApp
+  - PepperWatchWatchWidgets
+  - WatchShared
+  - PepperWatchTests
+  - PepperWatchWatchTests
+
+# House style: trailing commas in multi-line literals, long SwiftUI modifier chains, short
+# geometry and color names (x, y, r, g, b), nested Codable types and labeled tuples.
+disabled_rules:
+  - trailing_comma
+  - identifier_name
+  - large_tuple
+  - nesting
+  - implicit_optional_initialization
+  - type_name # Pepper_WatchApp is Xcode's generated app name
+
+opt_in_rules:
+  - contains_over_filter_count
+  - contains_over_filter_is_empty
+  - contains_over_first_not_nil
+  - contains_over_range_nil_comparison
+  - discarded_notification_center_observer
+  - discouraged_assert
+  - empty_collection_literal
+  - empty_string
+  - fatal_error_message
+  - first_where
+  - flatmap_over_map_reduce
+  - identical_operands
+  - joined_default_parameter
+  - last_where
+  - legacy_multiple
+  - legacy_objc_type
+  - local_doc_comment
+  - lower_acl_than_parent
+  - overridden_super_call
+  - prefer_zero_over_explicit_init
+  - private_swiftui_state
+  - prohibited_super_call
+  - shorthand_optional_binding
+  - sorted_first_last
+  - static_operator
+  - toggle_bool
+  - unhandled_throwing_task
+  - unowned_variable_capture
+  - weak_delegate
+  - yoda_condition
+
+# Size limits sit just above today's largest files and functions, so they can't grow further.
+line_length:
+  warning: 300
+  ignores_urls: true
+file_length:
+  warning: 800
+type_body_length:
+  warning: 450
+function_body_length:
+  warning: 80
+cyclomatic_complexity:
+  warning: 20
+
+reporter: xcode

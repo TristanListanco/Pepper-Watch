@@ -69,12 +69,14 @@ jobs:
 
       - name: Test
         run: |
+          # Every target builds without warnings, so any new compiler warning fails the job.
           set -o pipefail
           xcodebuild test \
             -project "Pepper Watch.xcodeproj" \
             -scheme "$SCHEME" \
             -destination "id=$UDID" \
-            -resultBundlePath TestResults.xcresult
+            -resultBundlePath TestResults.xcresult \
+            SWIFT_TREAT_WARNINGS_AS_ERRORS=YES
         env:
           SCHEME: ${{ matrix.scheme }}
           UDID: ${{ steps.simulator.outputs.udid }}
