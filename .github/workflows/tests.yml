@@ -16,6 +16,10 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  # The release the app is developed with; the runner also carries newer betas.
+  XCODE_VERSION: "27.0"
+
 jobs:
   test:
     name: ${{ matrix.name }}
@@ -38,10 +42,9 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      - name: Select Xcode 27
+      - name: Select Xcode
         run: |
-          xcode=$(ls -d /Applications/Xcode_27*.app | sort -V | tail -n 1)
-          sudo xcode-select --switch "$xcode"
+          sudo xcode-select --switch "/Applications/Xcode_$XCODE_VERSION.app"
           xcodebuild -version
 
       - name: Pick a simulator
