@@ -13,13 +13,6 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
-		7E57C0DE0000000000000206 /* PBXContainerItemProxy */ = {
-			isa = PBXContainerItemProxy;
-			containerPortal = 63F68295306B92B300298C1C /* Project object */;
-			proxyType = 1;
-			remoteGlobalIDString = 63F6829C306B92B300298C1C;
-			remoteInfo = "Pepper Watch";
-		};
 		5EA7C0DE000000000000000D /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
 			containerPortal = 63F68295306B92B300298C1C /* Project object */;
@@ -55,6 +48,13 @@
 			remoteGlobalIDString = 5EA7C0DE0000000000000007;
 			remoteInfo = PepperWatchWatchApp;
 		};
+		7E57C0DE0000000000000206 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 63F68295306B92B300298C1C /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 63F6829C306B92B300298C1C;
+			remoteInfo = "Pepper Watch";
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -88,13 +88,13 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		7E57C0DE0000000000000201 /* PepperWatchUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PepperWatchUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		5EA7C0DE0000000000000001 /* PepperWatchWatchApp.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = PepperWatchWatchApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		5EA7C0DE0000000000000021 /* PepperWatchWatchWidgetsExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = PepperWatchWatchWidgetsExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		63F6829D306B92B300298C1C /* Pepper Watch.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "Pepper Watch.app"; sourceTree = BUILT_PRODUCTS_DIR; };
 		7A11C0DE0000000000000001 /* PepperWatchWidgetsExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = PepperWatchWidgetsExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		7E57C0DE0000000000000001 /* PepperWatchTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PepperWatchTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		7E57C0DE0000000000000101 /* PepperWatchWatchTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PepperWatchWatchTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		7E57C0DE0000000000000201 /* PepperWatchUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = PepperWatchUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -117,11 +117,6 @@
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
-		7E57C0DE0000000000000202 /* PepperWatchUITests */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = PepperWatchUITests;
-			sourceTree = "<group>";
-		};
 		5EA7C0DE0000000000000002 /* PepperWatchWatchApp */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = PepperWatchWatchApp;
@@ -166,16 +161,14 @@
 			path = PepperWatchWatchTests;
 			sourceTree = "<group>";
 		};
+		7E57C0DE0000000000000202 /* PepperWatchUITests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = PepperWatchUITests;
+			sourceTree = "<group>";
+		};
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
-		7E57C0DE0000000000000204 /* Frameworks */ = {
-			isa = PBXFrameworksBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		5EA7C0DE0000000000000005 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			files = (
@@ -202,6 +195,11 @@
 			);
 		};
 		7E57C0DE0000000000000104 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			files = (
+			);
+		};
+		7E57C0DE0000000000000204 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			files = (
 			);
@@ -242,27 +240,6 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		7E57C0DE0000000000000208 /* PepperWatchUITests */ = {
-			isa = PBXNativeTarget;
-			buildConfigurationList = 7E57C0DE0000000000000209 /* Build configuration list for PBXNativeTarget "PepperWatchUITests" */;
-			buildPhases = (
-				7E57C0DE0000000000000203 /* Sources */,
-				7E57C0DE0000000000000204 /* Frameworks */,
-				7E57C0DE0000000000000205 /* Resources */,
-			);
-			buildRules = (
-			);
-			dependencies = (
-				7E57C0DE0000000000000207 /* PBXTargetDependency */,
-			);
-			fileSystemSynchronizedGroups = (
-				7E57C0DE0000000000000202 /* PepperWatchUITests */,
-			);
-			name = PepperWatchUITests;
-			productName = PepperWatchUITests;
-			productReference = 7E57C0DE0000000000000201 /* PepperWatchUITests.xctest */;
-			productType = "com.apple.product-type.bundle.ui-testing";
-		};
 		5EA7C0DE0000000000000007 /* PepperWatchWatchApp */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 5EA7C0DE000000000000000A /* Build configuration list for PBXNativeTarget "PepperWatchWatchApp" */;
@@ -393,6 +370,27 @@
 			productReference = 7E57C0DE0000000000000101 /* PepperWatchWatchTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
+		7E57C0DE0000000000000208 /* PepperWatchUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 7E57C0DE0000000000000209 /* Build configuration list for PBXNativeTarget "PepperWatchUITests" */;
+			buildPhases = (
+				7E57C0DE0000000000000203 /* Sources */,
+				7E57C0DE0000000000000204 /* Frameworks */,
+				7E57C0DE0000000000000205 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				7E57C0DE0000000000000207 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				7E57C0DE0000000000000202 /* PepperWatchUITests */,
+			);
+			name = PepperWatchUITests;
+			productName = PepperWatchUITests;
+			productReference = 7E57C0DE0000000000000201 /* PepperWatchUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -403,10 +401,6 @@
 				LastSwiftUpdateCheck = 2700;
 				LastUpgradeCheck = 2700;
 				TargetAttributes = {
-					7E57C0DE0000000000000208 = {
-						CreatedOnToolsVersion = 27.0;
-						TestTargetID = 63F6829C306B92B300298C1C;
-					};
 					5EA7C0DE0000000000000007 = {
 						CreatedOnToolsVersion = 27.0;
 					};
@@ -426,6 +420,10 @@
 					7E57C0DE0000000000000108 = {
 						CreatedOnToolsVersion = 27.0;
 						TestTargetID = 5EA7C0DE0000000000000007;
+					};
+					7E57C0DE0000000000000208 = {
+						CreatedOnToolsVersion = 27.0;
+						TestTargetID = 63F6829C306B92B300298C1C;
 					};
 				};
 			};
@@ -455,13 +453,6 @@
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
-		7E57C0DE0000000000000205 /* Resources */ = {
-			isa = PBXResourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		5EA7C0DE0000000000000006 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			files = (
@@ -492,16 +483,14 @@
 			files = (
 			);
 		};
+		7E57C0DE0000000000000205 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			files = (
+			);
+		};
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
-		7E57C0DE0000000000000203 /* Sources */ = {
-			isa = PBXSourcesBuildPhase;
-			buildActionMask = 2147483647;
-			files = (
-			);
-			runOnlyForDeploymentPostprocessing = 0;
-		};
 		5EA7C0DE0000000000000004 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			files = (
@@ -532,14 +521,14 @@
 			files = (
 			);
 		};
+		7E57C0DE0000000000000203 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			files = (
+			);
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
-		7E57C0DE0000000000000207 /* PBXTargetDependency */ = {
-			isa = PBXTargetDependency;
-			target = 63F6829C306B92B300298C1C /* Pepper Watch */;
-			targetProxy = 7E57C0DE0000000000000206 /* PBXContainerItemProxy */;
-		};
 		5EA7C0DE000000000000000E /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
 			target = 5EA7C0DE0000000000000007 /* PepperWatchWatchApp */;
@@ -565,53 +554,14 @@
 			target = 5EA7C0DE0000000000000007 /* PepperWatchWatchApp */;
 			targetProxy = 7E57C0DE0000000000000106 /* PBXContainerItemProxy */;
 		};
+		7E57C0DE0000000000000207 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 63F6829C306B92B300298C1C /* Pepper Watch */;
+			targetProxy = 7E57C0DE0000000000000206 /* PBXContainerItemProxy */;
+		};
 /* End PBXTargetDependency section */
 
 /* Begin XCBuildConfiguration section */
-		7E57C0DE000000000000020A /* Debug configuration for PBXNativeTarget "PepperWatchUITests" */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = NSA2PC5U28;
-				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.tristanlistanco.Pepper-Watch.UITests";
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = iphoneos;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_EMIT_LOC_STRINGS = NO;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_TARGET_NAME = "Pepper Watch";
-			};
-			name = Debug;
-		};
-		7E57C0DE000000000000020B /* Release configuration for PBXNativeTarget "PepperWatchUITests" */ = {
-			isa = XCBuildConfiguration;
-			buildSettings = {
-				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = NSA2PC5U28;
-				GENERATE_INFOPLIST_FILE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
-				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = "com.tristanlistanco.Pepper-Watch.UITests";
-				PRODUCT_NAME = "$(TARGET_NAME)";
-				SDKROOT = iphoneos;
-				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_EMIT_LOC_STRINGS = NO;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
-				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_TARGET_NAME = "Pepper Watch";
-			};
-			name = Release;
-		};
 		5EA7C0DE0000000000000008 /* Debug configuration for PBXNativeTarget "PepperWatchWatchApp" */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -1132,17 +1082,53 @@
 			};
 			name = Release;
 		};
+		7E57C0DE000000000000020A /* Debug configuration for PBXNativeTarget "PepperWatchUITests" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = NSA2PC5U28;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.tristanlistanco.Pepper-Watch.UITests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = "Pepper Watch";
+			};
+			name = Debug;
+		};
+		7E57C0DE000000000000020B /* Release configuration for PBXNativeTarget "PepperWatchUITests" */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = NSA2PC5U28;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 27.0;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.tristanlistanco.Pepper-Watch.UITests";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = "Pepper Watch";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		7E57C0DE0000000000000209 /* Build configuration list for PBXNativeTarget "PepperWatchUITests" */ = {
-			isa = XCConfigurationList;
-			buildConfigurations = (
-				7E57C0DE000000000000020A /* Debug configuration for PBXNativeTarget "PepperWatchUITests" */,
-				7E57C0DE000000000000020B /* Release configuration for PBXNativeTarget "PepperWatchUITests" */,
-			);
-			defaultConfigurationName = Release;
-		};
 		5EA7C0DE000000000000000A /* Build configuration list for PBXNativeTarget "PepperWatchWatchApp" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
@@ -1196,6 +1182,14 @@
 			buildConfigurations = (
 				7E57C0DE000000000000010A /* Debug configuration for PBXNativeTarget "PepperWatchWatchTests" */,
 				7E57C0DE000000000000010B /* Release configuration for PBXNativeTarget "PepperWatchWatchTests" */,
+			);
+			defaultConfigurationName = Release;
+		};
+		7E57C0DE0000000000000209 /* Build configuration list for PBXNativeTarget "PepperWatchUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				7E57C0DE000000000000020A /* Debug configuration for PBXNativeTarget "PepperWatchUITests" */,
+				7E57C0DE000000000000020B /* Release configuration for PBXNativeTarget "PepperWatchUITests" */,
 			);
 			defaultConfigurationName = Release;
 		};
