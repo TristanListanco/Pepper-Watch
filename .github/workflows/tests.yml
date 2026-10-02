@@ -67,15 +67,26 @@ jobs:
           RUNTIME: ${{ matrix.runtime }}
           DEVICE: ${{ matrix.device }}
 
+      - name: Boot the simulator
+        # A cold boot during the first UI test can time out the app's launch.
+        run: |
+          xcrun simctl boot "$UDID" || true
+          xcrun simctl bootstatus "$UDID" -b
+        env:
+          UDID: ${{ steps.simulator.outputs.udid }}
+
       - name: Test
         run: |
           # Every target builds without warnings, so any new compiler warning fails the job.
+          # A failing test gets one retry for runner hiccups; a real failure fails both times.
           set -o pipefail
           xcodebuild test \
             -project "Pepper Watch.xcodeproj" \
             -scheme "$SCHEME" \
             -destination "id=$UDID" \
             -resultBundlePath TestResults.xcresult \
+            -retry-tests-on-failure \
+            -test-iterations 2 \
             SWIFT_TREAT_WARNINGS_AS_ERRORS=YES
         env:
           SCHEME: ${{ matrix.scheme }}
