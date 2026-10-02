@@ -37,6 +37,7 @@ struct ClassCountLabel: View {
         HStack(spacing: 6) {
             Image(systemName: leafClass.symbol)
                 .foregroundStyle(leafClass.color)
+                .accessibilityHidden(true)
             Text(count, format: .number)
                 .font(.title3.weight(.semibold))
                 .contentTransition(.numericText(value: Double(count)))

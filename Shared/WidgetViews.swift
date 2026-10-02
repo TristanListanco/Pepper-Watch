@@ -116,6 +116,7 @@ private struct FieldSummaryView: View {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 4) {
                     Image(systemName: "leaf.fill")
+                        .accessibilityHidden(true)
                     Text(status.name)
                         .lineLimit(1)
                 }
@@ -254,6 +255,7 @@ struct FieldActionsWidgetView: View {
                 VStack(spacing: 6) {
                     Image(systemName: "leaf.circle.fill")
                         .font(.largeTitle)
+                        .accessibilityHidden(true)
                     Text("Open Pepper Watch to set up a field.")
                         .font(.caption)
                         .multilineTextAlignment(.center)
@@ -267,6 +269,7 @@ struct FieldActionsWidgetView: View {
     private func header(_ status: WidgetSnapshot.FieldStatus) -> some View {
         HStack(spacing: 4) {
             Image(systemName: "leaf.fill")
+                .accessibilityHidden(true)
             Text(status.name)
                 .lineLimit(1)
         }

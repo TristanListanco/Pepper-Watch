@@ -413,6 +413,7 @@ private struct HistoryTile: View {
                     Image(uiImage: image)
                         .resizable()
                         .scaledToFill()
+                        .accessibilityHidden(true)
                 } else {
                     ImagePlaceholder()
                 }
@@ -424,6 +425,7 @@ private struct HistoryTile: View {
                         if let severity = event.severity {
                             Image(systemName: severity.symbol)
                                 .foregroundStyle(severity.color)
+                                .accessibilityHidden(true)
                         }
                         Text("\(event.aphidCount)/\(event.aphidCount + event.healthyCount)")
                             .monospacedDigit()
@@ -448,6 +450,7 @@ private struct HistoryTile: View {
                         .padding(5)
                         .background(.ultraThinMaterial, in: .circle)
                         .padding(5)
+                        .accessibilityHidden(true)
                 }
             }
             .overlay {
@@ -463,12 +466,14 @@ private struct HistoryTile: View {
                         .foregroundStyle(.white, isSelected ? Color.accentColor : .black.opacity(0.25))
                         .shadow(radius: 2)
                         .padding(6)
+                        .accessibilityHidden(true)
                 }
             }
             .clipShape(.rect(cornerRadius: compact ? 4 : 10))
             .contentShape(.rect(cornerRadius: compact ? 4 : 10))
             .accessibilityElement(children: .ignore)
             .accessibilityLabel("\(event.source.title) at \(event.timestamp.formatted(date: .omitted, time: .shortened)), \(event.aphidCount) of \(event.aphidCount + event.healthyCount) leaves infested, \(event.severity?.title ?? "no leaves")")
+            .accessibilityAddTraits(isSelected == true ? .isSelected : [])
     }
 }
 

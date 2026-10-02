@@ -259,6 +259,7 @@ struct InsightsView: View {
                             Text(showAllMetrics ? "Show Less" : "Show All Metrics")
                             Spacer()
                             Image(systemName: showAllMetrics ? "chevron.up" : "chevron.down")
+                                .accessibilityHidden(true)
                         }
                         .font(.body.weight(.medium))
                         .padding()

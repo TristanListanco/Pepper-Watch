@@ -185,12 +185,14 @@ private struct ScanReportView: View {
         VStack(spacing: 2) {
             Image(systemName: leafClass.symbol)
                 .foregroundStyle(leafClass.color)
+                .accessibilityHidden(true)
             Text(count, format: .number)
                 .font(.title2.weight(.bold))
             Text(leafClass.displayName)
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
+        .accessibilityElement(children: .combine)
     }
 }
 
