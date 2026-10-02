@@ -185,7 +185,7 @@ enum Project {
         let configurations: [String: [String: String]]
     }
 
-    /// Every app and extension target; test bundles are left out.
+    /// Every app and extension target; unit and UI test bundles are left out.
     static let targets = loadTargets()
 
     /// Every Swift file a shipped target compiles, once each.
@@ -235,7 +235,7 @@ enum Project {
 
         return objects.compactMap { id, object -> Target? in
             guard object["isa"] as? String == "PBXNativeTarget",
-                  object["productType"] as? String != "com.apple.product-type.bundle.unit-test" else { return nil }
+                  let productType = object["productType"] as? String, !productType.hasPrefix("com.apple.product-type.bundle.") else { return nil }
             var sources: [SourceFile] = []
             var assetNames: Set<String> = []
             for group in (object["fileSystemSynchronizedGroups"] as? [String] ?? []).compactMap({ objects[$0] }) {
