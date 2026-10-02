@@ -31,7 +31,7 @@ struct ModelInfoView: View {
                 Section {
                     HStack {
                         ProgressView()
-                        Text("Loading model…").foregroundStyle(.secondary)
+                        Text("Loading model…").foregroundStyle(.secondaryText)
                     }
                 }
             }
@@ -56,7 +56,7 @@ struct ModelInfoView: View {
                     Text(name).font(.body.monospaced())
                 } label: {
                     Label("Class \(index)", systemImage: leafClass?.symbol ?? "tag")
-                        .foregroundStyle(leafClass?.color ?? .secondary)
+                        .foregroundStyle((leafClass?.color ?? .secondary).legible)
                 }
             }
             LabeledContent("Default confidence", value: info.defaultConfidence.map { $0.fixed(2) } ?? "—")
@@ -69,7 +69,7 @@ struct ModelInfoView: View {
             DisclosureGroup("Export arguments") {
                 Text(info.exportArguments)
                     .font(.caption.monospaced())
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.secondaryText)
                     .textSelection(.enabled)
             }
         } header: {
@@ -126,16 +126,16 @@ struct ModelInfoView: View {
                         Text("Not on the Neural Engine")
                         Text(computePlan.fallbackOperators.prefix(6).map { "\($0.name) ×\($0.count)" }.joined(separator: ", "))
                             .font(.caption.monospaced())
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(.secondaryText)
                     }
                 }
             } else if let computePlanError {
                 Label(computePlanError, systemImage: "exclamationmark.triangle")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.secondaryText)
             } else {
                 HStack {
                     ProgressView()
-                    Text("Analyzing…").foregroundStyle(.secondary)
+                    Text("Analyzing…").foregroundStyle(.secondaryText)
                 }
             }
         } header: {
@@ -192,7 +192,7 @@ struct ModelInfoView: View {
                 ProgressView(value: Double(benchmarkRuns), total: Double(iterations)) {
                     Text("\(benchmarkRuns) of \(iterations) runs")
                         .font(.caption.monospacedDigit())
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.secondaryText)
                 }
             }
 
@@ -207,14 +207,14 @@ struct ModelInfoView: View {
                 LabeledContent("Min / p95 / Max", value: "\(benchmark.minimum.fixed(1)) / \(benchmark.p95.fixed(1)) / \(benchmark.maximum.fixed(1)) ms")
                 LabeledContent("Model throughput") {
                     Label("\(benchmark.impliedFPS.fixed(1)) FPS", systemImage: passes ? Severity.clear.symbol : Severity.severe.symbol)
-                        .foregroundStyle(passes ? Severity.clear.color : Severity.severe.color)
+                        .foregroundStyle((passes ? Severity.clear.color : Severity.severe.color).legible)
                 }
                 Chart {
                     RuleMark(y: .value("Mean", benchmark.mean))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.secondaryText)
                         .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 4]))
                         .annotation(position: .top, alignment: .trailing, spacing: 2) {
-                            Text("Mean").font(.caption2).foregroundStyle(.secondary)
+                            Text("Mean").font(.caption2).foregroundStyle(.secondaryText)
                         }
                     ForEach(Array(benchmark.latenciesMs.enumerated()), id: \.offset) { index, latency in
                         BarMark(x: .value("Run", index + 1), y: .value("ms", latency))

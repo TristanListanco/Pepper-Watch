@@ -146,7 +146,7 @@ private struct LogRow: View {
                     Spacer()
                     Text(log.timestamp, format: .dateTime.month().day().hour().minute().second())
                         .font(.caption2.monospacedDigit())
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.secondaryText)
                 }
                 Text(log.message)
                     .font(.subheadline)

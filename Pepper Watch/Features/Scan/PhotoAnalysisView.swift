@@ -45,7 +45,7 @@ struct PhotoAnalysisView: View {
                         Spacer()
                         Text("\(analysis.inferenceMs.fixed(0)) ms")
                             .font(.caption.monospacedDigit())
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(.secondaryText)
                     }
                     .padding(.horizontal, 4)
 

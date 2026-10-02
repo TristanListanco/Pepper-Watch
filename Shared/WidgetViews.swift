@@ -18,11 +18,11 @@ nonisolated enum WidgetPalette {
     /// but deep enough for white text. Dark mode keeps only a deep tint of the same hue.
     static func gradient(for severity: Severity?, dark: Bool = false) -> [Color] {
         switch (severity, dark) {
-        case (.clear?, false): [Color(red: 0.14, green: 0.65, blue: 0.35), Color(red: 0.05, green: 0.42, blue: 0.22)]
-        case (.low?, false): [Color(red: 0.80, green: 0.56, blue: 0.05), Color(red: 0.53, green: 0.34, blue: 0.0)]
-        case (.moderate?, false): [Color(red: 0.89, green: 0.41, blue: 0.18), Color(red: 0.60, green: 0.21, blue: 0.06)]
-        case (.severe?, false): [Color(red: 0.84, green: 0.21, blue: 0.24), Color(red: 0.52, green: 0.07, blue: 0.12)]
-        case (nil, false): [Color(red: 0.18, green: 0.54, blue: 0.23), Color(red: 0.08, green: 0.33, blue: 0.13)]
+        case (.clear?, false): [Color(red: 0.10, green: 0.52, blue: 0.28), Color(red: 0.05, green: 0.38, blue: 0.20)]
+        case (.low?, false): [Color(red: 0.62, green: 0.42, blue: 0.02), Color(red: 0.45, green: 0.29, blue: 0.0)]
+        case (.moderate?, false): [Color(red: 0.76, green: 0.31, blue: 0.12), Color(red: 0.56, green: 0.19, blue: 0.05)]
+        case (.severe?, false): [Color(red: 0.80, green: 0.19, blue: 0.22), Color(red: 0.52, green: 0.07, blue: 0.12)]
+        case (nil, false): [Color(red: 0.16, green: 0.50, blue: 0.21), Color(red: 0.08, green: 0.33, blue: 0.13)]
         case (.clear?, true): [Color(red: 0.06, green: 0.24, blue: 0.14), Color(red: 0.02, green: 0.08, blue: 0.05)]
         case (.low?, true): [Color(red: 0.27, green: 0.19, blue: 0.03), Color(red: 0.09, green: 0.06, blue: 0.01)]
         case (.moderate?, true): [Color(red: 0.30, green: 0.13, blue: 0.05), Color(red: 0.10, green: 0.04, blue: 0.02)]
@@ -132,7 +132,6 @@ private struct FieldSummaryView: View {
                 SeverityTag(severity: window.severity, iconColor: accent)
                 Text(lastScan)
                     .font(.caption2)
-                    .opacity(0.8)
                     .lineLimit(1)
                     .padding(.top, 2)
             }
@@ -176,9 +175,9 @@ private struct WeekBars: View {
                             .widgetAccentable(counts[day] != nil)
                             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottom)
                     }
+                    // Today stands out by weight, so every letter keeps full contrast.
                     Text(day.formatted(.dateTime.weekday(.narrow)))
-                        .font(.caption2.weight(.semibold))
-                        .opacity(calendar.isDate(day, inSameDayAs: now) ? 1 : 0.7)
+                        .font(.caption2.weight(calendar.isDate(day, inSameDayAs: now) ? .heavy : .medium))
                 }
             }
         }

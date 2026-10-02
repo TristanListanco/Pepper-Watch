@@ -51,7 +51,7 @@ struct InfestationTrendChart: View {
                     .annotation(position: .top, alignment: .leading, spacing: 2) {
                         Label(severity.title, systemImage: severity.symbol)
                             .font(.caption2)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(.secondaryText)
                     }
             }
 
@@ -74,11 +74,11 @@ struct InfestationTrendChart: View {
                     .annotation(position: .top, overflowResolution: .init(x: .fit(to: .chart), y: .disabled)) {
                         ChartTooltip {
                             Text(selectedPoint.date, format: unit.dateFormat)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(.secondaryText)
                             Text("\(selectedPoint.rate.percentText) infested")
                                 .font(.caption.weight(.semibold))
                             Text("\(selectedPoint.aphid) of \(selectedPoint.total) leaves · \(selectedPoint.scans) scans")
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(.secondaryText)
                         }
                     }
             }
@@ -121,7 +121,7 @@ struct DailyDetectionsChart: View {
                         .annotation(position: .top, overflowResolution: .init(x: .fit(to: .chart), y: .disabled)) {
                             ChartTooltip {
                                 Text(first.date, format: unit.dateFormat)
-                                    .foregroundStyle(.secondary)
+                                    .foregroundStyle(.secondaryText)
                                 ForEach(bucketCounts) { item in
                                     Label("\(item.leafClass.displayName): \(item.count)", systemImage: item.leafClass.symbol)
                                 }
@@ -166,7 +166,7 @@ struct FieldRatesChart: View {
                 .annotation(position: .trailing, spacing: 6) {
                     Text("\(field.rate.percentText) · \(field.total) leaves")
                         .font(.caption.monospacedDigit())
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.secondaryText)
                 }
         }
         .chartXScale(domain: 0...1.35)
@@ -201,7 +201,7 @@ struct ConfidenceHistogramChart: View {
                     .annotation(position: .top, overflowResolution: .init(x: .fit(to: .chart), y: .disabled)) {
                         ChartTooltip {
                             Text("Confidence \(selectedBin)")
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(.secondaryText)
                             ForEach(binCounts) { item in
                                 Label("\(item.leafClass.displayName): \(item.count)", systemImage: item.leafClass.symbol)
                             }
@@ -270,9 +270,9 @@ struct ValidationMatrixView: View {
         let intensity = Double(count) / Double(maxCount)
         // One-hue sequential ramp: darker means more boxes.
         return VStack(spacing: 2) {
-            Text(title).font(.caption2.weight(.bold)).foregroundStyle(.secondary)
+            Text(title).font(.caption2.weight(.bold)).foregroundStyle(.secondaryText)
             Text(count, format: .number).font(.title2.weight(.semibold).monospacedDigit())
-            Text(note).font(.caption2).foregroundStyle(.secondary)
+            Text(note).font(.caption2).foregroundStyle(.secondaryText)
         }
         .frame(maxWidth: .infinity, minHeight: 78)
         .background(Color(red: 0.165, green: 0.471, blue: 0.839).opacity(0.1 + intensity * 0.5), in: .rect(cornerRadius: 12))
@@ -281,7 +281,7 @@ struct ValidationMatrixView: View {
 
     private func metricTile(_ title: String, _ value: Double?, formula: String) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(title).font(.caption).foregroundStyle(.secondary)
+            Text(title).font(.caption).foregroundStyle(.secondaryText)
             Text(value.map(\.percentText) ?? "—").font(.title3.weight(.semibold).monospacedDigit())
             Text(formula).font(.caption2.monospaced()).foregroundStyle(.tertiary)
         }
@@ -294,11 +294,11 @@ struct ValidationMatrixView: View {
 
 private extension Text {
     func gridColumnHeader() -> some View {
-        font(.caption2.weight(.semibold)).foregroundStyle(.secondary).multilineTextAlignment(.center)
+        font(.caption2.weight(.semibold)).foregroundStyle(.secondaryText).multilineTextAlignment(.center)
     }
 
     func gridRowHeader() -> some View {
-        font(.caption2.weight(.semibold)).foregroundStyle(.secondary).multilineTextAlignment(.trailing)
+        font(.caption2.weight(.semibold)).foregroundStyle(.secondaryText).multilineTextAlignment(.trailing)
     }
 }
 
@@ -327,7 +327,7 @@ struct SessionPerformanceChart: View {
                 .annotation(position: .top, alignment: .trailing, spacing: 2) {
                     Text("Target ≥ \(target.fixed(0)) FPS")
                         .font(.caption2)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.secondaryText)
                 }
 
             ForEach(sessions) { session in
@@ -346,11 +346,11 @@ struct SessionPerformanceChart: View {
                     .annotation(position: .top, overflowResolution: .init(x: .fit(to: .chart), y: .disabled)) {
                         ChartTooltip {
                             Text(selected.date, format: .dateTime.month().day().hour().minute())
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(.secondaryText)
                             Text("\(selected.fps.fixed(1)) FPS · \(selected.latencyMs.fixed(0)) ms")
                                 .font(.caption.weight(.semibold))
                             Text("\(selected.field) · \(selected.computeUnits)")
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(.secondaryText)
                         }
                     }
             }

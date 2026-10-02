@@ -364,9 +364,11 @@ private struct HistoryTile: View {
                             .monospacedDigit()
                     }
                     .font(.caption2.weight(.semibold))
+                    // White on a dark capsule reads over any photo, light or dark.
+                    .foregroundStyle(.white)
                     .padding(.horizontal, 6)
                     .padding(.vertical, 3)
-                    .background(.ultraThinMaterial, in: .capsule)
+                    .background(.black.opacity(0.6), in: .capsule)
                     .padding(5)
                 } else if let severity = event.severity {
                     // Tiny thumbnails keep only the severity color strip.

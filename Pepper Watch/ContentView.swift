@@ -38,6 +38,9 @@ struct ContentView: View {
         .tabBarMinimizeBehavior(.onScrollDown)
         // MapKit resets the window tint to system blue; pin the brand green explicitly.
         .tint(Color(.accent))
+        // Secondary text everywhere, including system lists and labeled values, at 60% of the
+        // label color: 4.5:1 or better on pages and cards, where the system gray falls short.
+        .foregroundStyle(Color.primary, Color.primary.opacity(0.6))
         // Widget taps arrive as pepperwatch:// links.
         .onOpenURL { navigator.open($0) }
         // Handoff from the watch: continue in Insights for the field it was showing.

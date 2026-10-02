@@ -110,7 +110,7 @@ struct FieldOnboardingView: View {
                         .multilineTextAlignment(.center)
                     Text("Pepper Watch links every scan to a field so it can check where you are and track aphid damage over time.")
                         .font(.body)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.secondaryText)
                         .multilineTextAlignment(.center)
                 }
                 .padding(.top, 40)
@@ -176,7 +176,7 @@ private struct OnboardingRow: View {
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).font(.headline)
-                Text(detail).font(.subheadline).foregroundStyle(.secondary)
+                Text(detail).font(.subheadline).foregroundStyle(.secondaryText)
             }
         }
         .accessibilityElement(children: .combine)

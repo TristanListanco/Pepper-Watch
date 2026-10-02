@@ -144,12 +144,12 @@ struct DetectionDetailView: View {
                     .fixedSize(horizontal: false, vertical: true)
                 ForEach(insight.observations, id: \.self) { observation in
                     Text(observation)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.secondaryText)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             } else {
                 Text("Analyzing this photo…")
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.secondaryText)
             }
         }
         .padding()
@@ -213,14 +213,14 @@ struct DetectionDetailView: View {
                 let reviewed = event.boxes.filter { $0.verdict != nil }.count
                 Text("\(reviewed)/\(event.boxes.count) reviewed")
                     .font(.caption.monospacedDigit())
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.secondaryText)
             }
             TipView(VerifyDetectionsTip())
 
             if sortedBoxes.isEmpty {
                 Text("No leaves were detected in this scan.")
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.secondaryText)
                     .padding(.vertical, 8)
             }
 
@@ -355,7 +355,7 @@ private struct VerificationRow: View {
                             .font(.subheadline.weight(.semibold))
                         Text("\(box.confidence.percentText) confidence")
                             .font(.caption.monospacedDigit())
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(.secondaryText)
                     }
                     Spacer(minLength: 0)
                 }

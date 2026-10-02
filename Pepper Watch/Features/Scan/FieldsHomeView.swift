@@ -160,7 +160,7 @@ struct FieldsHomeView: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Label("Precise Location is off, so scans can't be verified inside a field.", systemImage: "location.slash")
                         .font(.footnote)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.secondaryText)
                     Button("Use Precise Location While Scanning", systemImage: "location.fill") {
                         location.requestPreciseLocation()
                     }
@@ -171,7 +171,7 @@ struct FieldsHomeView: View {
             if location.isDenied {
                 Text("Turn on location access to find the field you're standing in and verify scans.")
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.secondaryText)
                 Button("Open Settings", systemImage: "gear") {
                     if let url = URL(string: UIApplication.openSettingsURLString) { openURL(url) }
                 }
@@ -184,7 +184,7 @@ struct FieldsHomeView: View {
                         .accessibilityHidden(true)
                     Text("Finding your location…")
                         .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.secondaryText)
                 }
             } else if let inside = geofence.containingRegion(in: regions, location: location.lastLocation),
                       let field = fields.first(where: { $0.id == inside.id }) {
@@ -198,7 +198,7 @@ struct FieldsHomeView: View {
                     .font(.title3.weight(.semibold))
                     Text("Your location is inside this field's boundary, so scans will be verified.")
                         .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.secondaryText)
                 }
                 Spacer(minLength: 0)
                 Button {
@@ -218,7 +218,7 @@ struct FieldsHomeView: View {
                         .font(.title3.weight(.semibold))
                     Text("\(status.distanceToEdge?.distanceText ?? "Some distance") from its boundary. Head there to log verified scans.")
                         .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.secondaryText)
                 }
                 Spacer(minLength: 0)
                 HStack(spacing: 12) {
@@ -326,14 +326,14 @@ private struct FieldCard: View {
                         .font(.headline)
                     Text(field.locationName.isEmpty ? "Radius \(field.radiusMeters.distanceText)" : field.locationName)
                         .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.secondaryText)
                 }
                 Spacer()
                 // The recommendation card already says when you're inside, so only show distance otherwise.
                 if status.presence != .inside, let distance = status.distanceMeters {
                     Label(distance.distanceText, systemImage: "location")
                         .font(.caption.weight(.semibold).monospacedDigit())
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.secondaryText)
                 }
             }
 
@@ -347,13 +347,13 @@ private struct FieldCard: View {
                         Image(systemName: "clock")
                     }
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.secondaryText)
                     .lineLimit(1)
                     .accessibilityLabel("Last scanned \(latest.timestamp.formatted(.relative(presentation: .named)))")
                 } else {
                     Label("Not scanned yet", systemImage: "camera.viewfinder")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.secondaryText)
                 }
                 Spacer()
                 Image(systemName: "chevron.right")

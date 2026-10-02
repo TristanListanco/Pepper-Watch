@@ -51,17 +51,17 @@ private struct ScanReportView: View {
                 Spacer()
                 Text("Scan Report")
                     .font(.headline)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.secondaryText)
             }
             VStack(alignment: .leading, spacing: 2) {
                 Text(event.fieldName.isEmpty ? "Unassigned scan" : event.fieldName)
                     .font(.title.weight(.bold))
                 Text(event.timestamp.formatted(date: .complete, time: .shortened))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.secondaryText)
                 if let verified = event.geofenceVerified {
                     Label(verified ? "Taken inside the field boundary" : "Taken outside the field boundary", systemImage: verified ? "checkmark.seal" : "location.slash")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.secondaryText)
                 }
             }
 
@@ -74,7 +74,7 @@ private struct ScanReportView: View {
                             .font(.system(size: 44, weight: .bold, design: .rounded))
                         Text("infested")
                             .font(.title3)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(.secondaryText)
                     }
                 }
                 Spacer()
@@ -97,7 +97,7 @@ private struct ScanReportView: View {
                     }
                     Text(insight.source.footnote)
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.secondaryText)
                 }
             }
 
@@ -121,7 +121,7 @@ private struct ScanReportView: View {
                                 .frame(width: 60, alignment: .trailing)
                             Text(box.verdict == .correct ? "Verified" : box.verdict == .incorrect ? "Rejected" : "—")
                                 .frame(width: 80, alignment: .trailing)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(.secondaryText)
                         }
                         .font(.callout)
                     }
@@ -133,7 +133,7 @@ private struct ScanReportView: View {
                 ForEach(details, id: \.label) { row in
                     HStack(alignment: .firstTextBaseline) {
                         Text(row.label)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(.secondaryText)
                         Spacer()
                         Text(row.value)
                             .multilineTextAlignment(.trailing)
@@ -151,7 +151,7 @@ private struct ScanReportView: View {
 
             Text("Generated on device by Pepper Watch. Detections come from an on-device YOLO model trained on bell pepper leaves (aphid-infested vs. healthy). Guidance is general; follow product labels and your local agriculturist's advice.")
                 .font(.caption2)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.secondaryText)
         }
         .padding(36)
         .background(Color.white)
@@ -190,7 +190,7 @@ private struct ScanReportView: View {
                 .font(.title2.weight(.bold))
             Text(leafClass.displayName)
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.secondaryText)
         }
         .accessibilityElement(children: .combine)
     }
