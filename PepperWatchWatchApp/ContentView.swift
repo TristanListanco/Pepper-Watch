@@ -260,6 +260,7 @@ private struct WaitingForPhoneView: View {
                     .foregroundStyle(Color.brand)
                     // Breathes while asking the iPhone for data (SF Symbols 6).
                     .symbolEffect(.breathe, isActive: phone.isRequesting)
+                    .accessibilityHidden(true)
                 Text("Open Pepper Watch on iPhone")
                     .font(.headline)
                     .multilineTextAlignment(.center)

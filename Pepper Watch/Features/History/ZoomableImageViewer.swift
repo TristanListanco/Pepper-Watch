@@ -74,6 +74,8 @@ struct ZoomableImageViewer: View {
         let fit = min(container.width / image.size.width, container.height / image.size.height)
         let displayed = CGSize(width: image.size.width * fit, height: image.size.height * fit)
         let renderer = ImageRenderer(
+            // Rendered offscreen into a bitmap; the viewer itself is labeled.
+            // swiftlint:disable:next accessibility_label_for_image
             content: Image(uiImage: image)
                 .resizable()
                 .overlay { DetectionOverlay(detections: detections, imageSize: image.size, contentMode: .fit) }

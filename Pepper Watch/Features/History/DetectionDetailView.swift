@@ -71,6 +71,8 @@ struct DetectionDetailView: View {
         .toolbar {
             ToolbarItem(placement: .primaryAction) {
                 if let reportURL {
+                    // The share sheet's thumbnail, not a view on screen.
+                    // swiftlint:disable:next accessibility_label_for_image
                     ShareLink(item: reportURL, preview: SharePreview("Pepper Watch scan report", image: Image(systemName: "doc.richtext"))) {
                         Label("Share Report", systemImage: "square.and.arrow.up")
                     }
@@ -174,10 +176,12 @@ struct DetectionDetailView: View {
                         .padding(8)
                         .glassEffect(.regular, in: .circle)
                         .padding(10)
+                        .accessibilityHidden(true)
                 }
             }
             .matchedTransitionSource(id: event.id, in: photoTransition)
             .onTapGesture { if event.imageData != nil { isViewingFullScreen = true } }
+            .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isButton)
             .accessibilityHint("Opens the photo full screen with pinch to zoom")
     }
@@ -330,6 +334,7 @@ private struct VerificationRow: View {
                     Group {
                         if let crop {
                             Image(uiImage: crop).resizable().scaledToFill()
+                                .accessibilityHidden(true)
                         } else {
                             ImagePlaceholder()
                         }
