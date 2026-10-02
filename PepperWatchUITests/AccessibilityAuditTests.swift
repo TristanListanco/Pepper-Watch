@@ -13,7 +13,12 @@
 import XCTest
 
 final class AccessibilityAuditTests: XCTestCase {
-    @MainActor func testFields() throws { try audit(tab: "scan") }
+    @MainActor func testFields() throws {
+        try audit(tab: "scan", known: [
+            // Seen on fresh simulators once satellite tiles with place names finish loading.
+            KnownIssue(.elementDetection, on: .map, "MapKit draws road and place names into the map's tiles, outside the accessibility tree."),
+        ])
+    }
 
     @MainActor func testInsights() throws { try audit(tab: "insights") }
 
@@ -25,7 +30,7 @@ final class AccessibilityAuditTests: XCTestCase {
 
     @MainActor func testDeveloper() throws {
         try audit(tab: "developer", known: [
-            KnownIssue(.elementDetection, unattributed: true, "The audit reports visible text it can't tie to an element on this screen."),
+            KnownIssue(.elementDetection, on: .unattributed, "The audit reports visible text it can't tie to an element on this screen."),
         ])
     }
 
@@ -33,7 +38,7 @@ final class AccessibilityAuditTests: XCTestCase {
 
     @MainActor func testSessions() throws {
         try audit(tab: "developer", "-PWDeveloperPage", "sessions", known: [
-            KnownIssue(.textClipped, unattributed: true, "The sessions table clips text the audit can't tie to an element."),
+            KnownIssue(.textClipped, on: .unattributed, "The sessions table clips text the audit can't tie to an element."),
         ])
     }
 
@@ -49,19 +54,33 @@ final class AccessibilityAuditTests: XCTestCase {
 
     /// An issue a screen is known to have, recorded as an expected failure.
     struct KnownIssue {
+        /// Which elements the known issue covers.
+        enum Scope {
+            /// Any element on the screen.
+            case anywhere
+            /// Only issues the audit couldn't attribute to an element.
+            case unattributed
+            /// The map, or text the audit couldn't attribute to an element.
+            case map
+        }
+
         let type: XCUIAccessibilityAuditType
-        /// Only issues the audit couldn't attribute to an element.
-        var unattributed = false
+        let scope: Scope
         let reason: String
 
-        init(_ type: XCUIAccessibilityAuditType, unattributed: Bool = false, _ reason: String) {
+        init(_ type: XCUIAccessibilityAuditType, on scope: Scope = .anywhere, _ reason: String) {
             self.type = type
-            self.unattributed = unattributed
+            self.scope = scope
             self.reason = reason
         }
 
-        func matches(_ issue: XCUIAccessibilityAuditIssue) -> Bool {
-            issue.auditType == type && (!unattributed || issue.element == nil)
+        @MainActor func matches(_ issue: XCUIAccessibilityAuditIssue) -> Bool {
+            guard issue.auditType == type else { return false }
+            switch scope {
+            case .anywhere: return true
+            case .unattributed: return issue.element == nil
+            case .map: return issue.element.map { $0.elementType == .map } ?? true
+            }
         }
     }
 
