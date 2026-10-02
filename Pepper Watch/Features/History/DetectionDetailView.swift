@@ -64,7 +64,8 @@ struct DetectionDetailView: View {
         // Scrolling away from Notes puts the keyboard away.
         .scrollDismissesKeyboard(.interactively)
         .background(Color(.systemGroupedBackground))
-        .navigationTitle(event.timestamp.formatted(date: .abbreviated, time: .shortened))
+        .navigationTitle(event.timestamp.formatted(date: .abbreviated, time: .omitted))
+        .navigationSubtitle(event.timestamp.formatted(date: .omitted, time: .shortened))
         .navigationBarTitleDisplayMode(.inline)
         // iPad: title on the leading edge, leaving room for the scan's actions.
         .toolbarRole(.editor)
@@ -125,10 +126,16 @@ struct DetectionDetailView: View {
                 if isGeneratingInsight {
                     ProgressView().controlSize(.small)
                 } else if insight != nil {
-                    Button("Regenerate", systemImage: "arrow.clockwise") {
+                    Button {
                         Task { await generateInsight() }
+                    } label: {
+                        // A 44-point target; the negative padding keeps the header its height.
+                        Label("Regenerate", systemImage: "arrow.clockwise")
+                            .labelStyle(.iconOnly)
+                            .frame(minWidth: 44, minHeight: 44)
+                            .contentShape(.rect)
                     }
-                    .labelStyle(.iconOnly)
+                    .padding(-12)
                 }
             }
             if let insight {
