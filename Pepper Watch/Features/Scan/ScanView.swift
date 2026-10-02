@@ -268,7 +268,7 @@ struct ScanView: View {
                     .animation(.smooth, value: scanner.eventsLoggedThisSession)
             }
             .font(.caption2.monospacedDigit())
-            .foregroundStyle(.secondary)
+            .foregroundStyle(.secondaryText)
         }
         .padding(.horizontal, 12)
         .padding(.vertical, 8)
@@ -309,7 +309,7 @@ struct ScanView: View {
                     .font(.subheadline.weight(.semibold))
                 Text("It looks smudged, which blurs leaves and hides early damage.")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.secondaryText)
             }
         } icon: {
             Image(systemName: "camera.aperture")
@@ -335,7 +335,7 @@ struct ScanView: View {
                          ? "\(status.distanceToEdge?.distanceText ?? "Some distance") from the boundary. Detections aren't being logged."
                          : "Logging anyway. These scans are marked unverified.")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.secondaryText)
                 }
             } icon: {
                 Image(systemName: "location.slash.fill")
@@ -555,7 +555,7 @@ private struct LeafCounter: View {
                 .contentTransition(.numericText(value: Double(count)))
             Text(leafClass.shortName)
                 .font(.subheadline)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.secondaryText)
         }
         .foregroundStyle(.white)
         .padding(.horizontal, 14)

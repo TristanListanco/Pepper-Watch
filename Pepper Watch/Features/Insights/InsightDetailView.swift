@@ -69,18 +69,18 @@ struct InsightDetailView: View {
         return VStack(alignment: .leading, spacing: 2) {
             Text(label)
                 .font(.caption.weight(.semibold))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.secondaryText)
             HStack(alignment: .firstTextBaseline, spacing: 4) {
                 Text(value)
                     .font(.system(size: 40, weight: .semibold, design: .rounded))
                     .contentTransition(.numericText())
                 Text(unit)
                     .font(.title3.weight(.medium))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.secondaryText)
             }
             Text(range.intervalText)
                 .font(.subheadline)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.secondaryText)
         }
         .accessibilityElement(children: .combine)
     }
@@ -136,7 +136,7 @@ struct InsightDetailView: View {
                 ForEach(lines.dropFirst(), id: \.self) { line in
                     Text(line)
                         .font(.body)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.secondaryText)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
@@ -161,7 +161,7 @@ struct InsightDetailView: View {
     private func aboutText(_ text: String) -> some View {
         Text(text)
             .font(.body)
-            .foregroundStyle(.secondary)
+            .foregroundStyle(.secondaryText)
             .fixedSize(horizontal: false, vertical: true)
             .frame(maxWidth: .infinity, alignment: .topLeading)
     }

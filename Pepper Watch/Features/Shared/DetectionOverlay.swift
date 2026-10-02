@@ -122,7 +122,7 @@ struct ImagePlaceholder: View {
             .overlay {
                 Image(systemName: "leaf")
                     .font(.title)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.secondaryText)
                     .accessibilityHidden(true)
             }
     }

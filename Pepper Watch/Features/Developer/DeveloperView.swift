@@ -99,7 +99,7 @@ struct DeveloperView: View {
                         Text(AphidDetector.modelName).font(.headline)
                         Text(engineStatus)
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(.secondaryText)
                     }
                 }
                 .padding(.vertical, 4)
@@ -233,7 +233,7 @@ struct DeveloperView: View {
                     .font(.headline)
                 Text("On-device companion to “Development of YOLOv8n Aphid Damage Detection and Offline Monitoring for Bell Pepper (Capsicum annuum) on Raspberry Pi 5”, MSU–Iligan Institute of Technology.")
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.secondaryText)
             }
             .padding(.vertical, 4)
             LabeledContent("Version", value: Bundle.main.appVersion)
@@ -316,11 +316,11 @@ private struct PerformanceSection: View {
                 : (passes ? "met" : "was below")
             Label("\(subject) \(status) the \(fpsTarget.fixed(0)) FPS target", systemImage: passes ? Severity.clear.symbol : Severity.severe.symbol)
                 .font(.subheadline.weight(.semibold))
-                .foregroundStyle(passes ? Severity.clear.color : Severity.severe.color)
+                .foregroundStyle((passes ? Severity.clear.color : Severity.severe.color).legible)
         } else {
             Label("Scan once to measure throughput", systemImage: "gauge.with.dots.needle.67percent")
                 .font(.subheadline.weight(.semibold))
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.secondaryText)
         }
     }
 
@@ -328,7 +328,7 @@ private struct PerformanceSection: View {
         VStack(alignment: .leading, spacing: 2) {
             Label(title, systemImage: symbol)
                 .font(.caption)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(.secondaryText)
                 .lineLimit(1)
             Text(value)
                 .font(.title3.weight(.semibold).monospacedDigit())

@@ -26,7 +26,7 @@ struct FieldStatusSnippet: View {
                         .font(.system(size: 40, weight: .semibold, design: .rounded))
                     Text("infested · \(stats.scanCount) scans · 7 days")
                         .font(.caption)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.secondaryText)
                 }
                 Spacer(minLength: 12)
                 SparklineChart(
@@ -54,7 +54,7 @@ struct SummarySnippet: View {
             ForEach(Array(content.observations.enumerated()), id: \.offset) { _, observation in
                 Text(observation)
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.secondaryText)
             }
             if let recommendation = content.recommendation {
                 Label {
