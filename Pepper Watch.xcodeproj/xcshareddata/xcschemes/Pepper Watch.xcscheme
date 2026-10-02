@@ -40,6 +40,17 @@
                ReferencedContainer = "container:Pepper Watch.xcodeproj">
             </BuildableReference>
          </TestableReference>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "7E57C0DE0000000000000208"
+               BuildableName = "PepperWatchUITests.xctest"
+               BlueprintName = "PepperWatchUITests"
+               ReferencedContainer = "container:Pepper Watch.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
       </Testables>
    </TestAction>
    <LaunchAction

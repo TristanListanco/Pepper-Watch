@@ -86,7 +86,7 @@ jobs:
         run: |
           xcrun xcresulttool get test-results summary --path TestResults.xcresult --compact > summary.json
           jq -r --arg name "${{ matrix.name }}" '
-            "### \($name) tests: \(.result)\n\n| Passed | Failed | Skipped | Total |\n| --- | --- | --- | --- |\n| \(.passedTests) | \(.failedTests) | \(.skippedTests) | \(.totalTestCount) |"
+            "### \($name) tests: \(.result)\n\n| Passed | Failed | Skipped | Expected failures | Total |\n| --- | --- | --- | --- | --- |\n| \(.passedTests) | \(.failedTests) | \(.skippedTests) | \(.expectedFailures // 0) | \(.totalTestCount) |"
           ' summary.json >> "$GITHUB_STEP_SUMMARY"
           jq -r '.testFailures[]? | "- **\(.testName)**: \(.failureText)"' summary.json >> "$GITHUB_STEP_SUMMARY"
 
