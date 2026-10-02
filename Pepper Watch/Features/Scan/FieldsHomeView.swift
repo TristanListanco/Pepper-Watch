@@ -327,7 +327,6 @@ private struct FieldCard: View {
                     Text(field.locationName.isEmpty ? "Radius \(field.radiusMeters.distanceText)" : field.locationName)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
-                        .lineLimit(1)
                 }
                 Spacer()
                 // The recommendation card already says when you're inside, so only show distance otherwise.

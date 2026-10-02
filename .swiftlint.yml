@@ -13,6 +13,7 @@ included:
   - WatchShared
   - PepperWatchTests
   - PepperWatchWatchTests
+  - PepperWatchUITests
 
 # House style: trailing commas in multi-line literals, long SwiftUI modifier chains, short
 # geometry and color names (x, y, r, g, b), nested Codable types and labeled tuples.

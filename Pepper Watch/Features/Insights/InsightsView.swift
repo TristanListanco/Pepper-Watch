@@ -529,11 +529,17 @@ private struct HighlightsCard: View {
                     ProgressView()
                         .controlSize(.small)
                 } else if isAI || narrator.phase.isFailure {
-                    Button("Regenerate", systemImage: "arrow.clockwise") {
+                    Button {
                         regenerations += 1
                         onRegenerate()
+                    } label: {
+                        // A 44-point target; the negative padding keeps the header its height.
+                        Label("Regenerate", systemImage: "arrow.clockwise")
+                            .labelStyle(.iconOnly)
+                            .frame(minWidth: 44, minHeight: 44)
+                            .contentShape(.rect)
                     }
-                    .labelStyle(.iconOnly)
+                    .padding(-12)
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .symbolEffect(.rotate, value: regenerations)
@@ -597,6 +603,8 @@ struct InsightSummaryCard: View {
     let metric: InsightMetric
     let current: InsightsStats
 
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
@@ -612,19 +620,21 @@ struct InsightSummaryCard: View {
                     .foregroundStyle(.tertiary)
             }
 
-            HStack(alignment: .bottom, spacing: 12) {
-                VStack(alignment: .leading, spacing: 2) {
-                    HStack(alignment: .firstTextBaseline, spacing: 4) {
-                        Text(value)
-                            .font(.system(.title, design: .rounded).weight(.semibold))
-                            .contentTransition(.numericText())
-                        Text(unit)
-                            .font(.subheadline.weight(.medium))
-                            .foregroundStyle(.secondary)
-                            .lineLimit(1)
-                    }
+            let layout = dynamicTypeSize.isAccessibilitySize
+                ? AnyLayout(VStackLayout(alignment: .leading, spacing: 12))
+                : AnyLayout(HStackLayout(alignment: .bottom, spacing: 12))
+            layout {
+                HStack(alignment: .firstTextBaseline, spacing: 4) {
+                    Text(value)
+                        .font(.system(.title, design: .rounded).weight(.semibold))
+                        .contentTransition(.numericText())
+                    Text(unit)
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.secondary)
                 }
-                Spacer(minLength: 8)
+                if !dynamicTypeSize.isAccessibilitySize {
+                    Spacer(minLength: 8)
+                }
                 miniChart
                     .frame(width: 112, height: 50)
             }
