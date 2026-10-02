@@ -99,7 +99,7 @@ struct DetectionDetailView: View {
         .onChange(of: reportURL, initial: true) { _, url in ScreenshotReportProvider.shared.show(url) }
         .onDisappear { ScreenshotReportProvider.shared.clear(reportURL) }
         .fullScreenCover(isPresented: $isViewingFullScreen) {
-            ZoomableImageViewer(imageData: event.imageData, detections: event.detections)
+            PhotoViewer(imageData: event.imageData, detections: event.detections)
                 .navigationTransition(.zoom(sourceID: event.id, in: photoTransition))
         }
         .task(id: event.id) {
@@ -190,7 +190,7 @@ struct DetectionDetailView: View {
             .onTapGesture { if event.imageData != nil { isViewingFullScreen = true } }
             .accessibilityElement(children: .combine)
             .accessibilityAddTraits(.isButton)
-            .accessibilityHint("Opens the photo full screen with pinch to zoom")
+            .accessibilityHint("Opens the photo full screen")
     }
 
     private var notes: some View {

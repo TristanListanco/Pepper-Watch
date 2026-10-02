@@ -7,7 +7,6 @@
 
 import SwiftData
 import SwiftUI
-import TipKit
 
 enum HistoryFilter: String, CaseIterable, Identifiable {
     case all = "All"
@@ -55,27 +54,13 @@ struct HistoryView: View {
     @State private var selection: Set<UUID> = []
     @State private var pendingDeletion: [DetectionEvent] = []
     @State private var path: [DetectionEvent] = []
-    /// The live pinch. Gesture state resets on its own, springing back, even when the system
-    /// cancels the pinch midway, so the grid never stays stuck at a scale.
-    @GestureState(resetTransaction: Transaction(animation: HistoryView.resizeAnimation))
-    private var pinch: Pinch?
 
-    /// One spring for the grid settling after a pinch or a size change from the menu.
+    /// The spring the grid settles with after a size change from the menu.
     static let resizeAnimation = Animation.spring(duration: 0.42, bounce: 0.12)
-    @State private var scrollPosition = ScrollPosition(idType: UUID.self)
-    /// Thumbnails on screen, in order, and the visible part of the grid, to keep the pinched
-    /// photos in view when the thumbnail size changes.
-    @State private var visibleIDs: [UUID] = []
-    @State private var visibleRect: CGRect = .zero
     @Namespace private var zoomSpace
     /// Each thumbnail's geometry, matched across thumbnail sizes so tiles glide to their new
     /// place and size instead of the grid reflowing.
     @Namespace private var gridSpace
-
-    private struct Pinch: Equatable {
-        var magnification: CGFloat
-        var anchor: UnitPoint
-    }
 
     /// Minimum thumbnail widths; the grid fits as many columns as the width allows (3 on iPhone at the default).
     private static let thumbnailSizes: [CGFloat] = [64, 84, 110, 150, 210, 300]
@@ -113,14 +98,7 @@ struct HistoryView: View {
         NavigationStack(path: $path) {
             ScrollView {
                 grid
-                // Photos-style pinch: the content follows the fingers, then settles at the new size.
-                // Scaling inside the scroll view keeps the large title and anchors the zoom in the content.
-                .scaleEffect(liveScale, anchor: pinch?.anchor ?? .center)
-                .simultaneousGesture(pinchToResize)
             }
-            .scrollPosition($scrollPosition)
-            .onScrollTargetVisibilityChange(idType: UUID.self, threshold: 0.5) { visibleIDs = $0 }
-            .onScrollGeometryChange(for: CGRect.self) { $0.visibleRect } action: { _, rect in visibleRect = rect }
             .refreshable { await refresh() }
             .background(Color(.systemGroupedBackground))
             .sensoryFeedback(.selection, trigger: thumbnailLevel)
@@ -188,7 +166,6 @@ struct HistoryView: View {
                 }
             }
         }
-        .scrollTargetLayout()
         .padding(.horizontal, 3)
     }
 
@@ -233,49 +210,6 @@ struct HistoryView: View {
                 filename: "pepper-watch-\(event.timestamp.formatted(.iso8601.year().month().day().time(includingFractionalSeconds: false).timeSeparator(.omitted))).jpg"
             ))
         }
-    }
-
-    /// How much the grid follows the fingers: freely between sizes, with a rubber band at either end.
-    private var liveScale: CGFloat {
-        guard let magnification = pinch?.magnification else { return 1 }
-        let largest = Self.thumbnailSizes.count - 1
-        if magnification > 1 {
-            return thumbnailLevel < largest ? min(magnification, 2) : 1 + (magnification - 1) * 0.12
-        } else {
-            return thumbnailLevel > 0 ? max(magnification, 0.5) : 1 - (1 - magnification) * 0.12
-        }
-    }
-
-    /// Pinch in to see more thumbnails, pinch out to see them larger. Like Photos, the grid scales
-    /// live around the pinch point, then springs into the new size with the pinched photos still
-    /// under your fingers.
-    private var pinchToResize: some Gesture {
-        MagnifyGesture()
-            .updating($pinch) { value, pinch, _ in
-                pinch = Pinch(magnification: value.magnification, anchor: value.startAnchor)
-            }
-            .onEnded { value in
-                PinchGridTip().invalidate(reason: .actionPerformed)
-                let magnification = value.magnification
-                var level = thumbnailLevel
-                if magnification > 1.15 {
-                    level += magnification > 1.7 ? 2 : 1
-                } else if magnification < 0.87 {
-                    level -= magnification < 0.6 ? 2 : 1
-                }
-                level = min(max(level, 0), Self.thumbnailSizes.count - 1)
-                guard level != thumbnailLevel else { return }
-
-                // The photo near the pinch, and how far down the screen it was.
-                let fraction = visibleRect.height > 0 ? min(max((value.startLocation.y - visibleRect.minY) / visibleRect.height, 0), 1) : 0.5
-                let anchorID = visibleIDs.isEmpty ? nil : visibleIDs[min(Int(fraction * CGFloat(visibleIDs.count)), visibleIDs.count - 1)]
-                withAnimation(Self.resizeAnimation) {
-                    thumbnailLevel = level
-                    if let anchorID {
-                        scrollPosition.scrollTo(id: anchorID, anchor: UnitPoint(x: 0.5, y: fraction))
-                    }
-                }
-            }
     }
 
     // MARK: - Toolbar
@@ -346,7 +280,6 @@ struct HistoryView: View {
                     Label("Filter", systemImage: filter == .all && fieldFilterID.isEmpty ? "line.3.horizontal.decrease" : "line.3.horizontal.decrease.circle.fill")
                 }
                 .help("Filter and Thumbnail Size")
-                .popoverTip(events.isEmpty ? nil : PinchGridTip())
             }
             .visibilityPriority(.high)
         }

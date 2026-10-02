@@ -50,12 +50,6 @@ struct PinMetricsTip: Tip {
     var image: Image? { Image(systemName: "pin") }
 }
 
-struct PinchGridTip: Tip {
-    var title: Text { Text("Pinch to resize") }
-    var message: Text? { Text("Pinch the grid to see more scans at once, or fewer and larger.") }
-    var image: Image? { Image(systemName: "hand.pinch") }
-}
-
 /// Field cards have no long-press menu, so their swipe actions need a pointer.
 struct FieldSwipeTip: Tip {
     /// Donated each time the Fields list appears; the tip waits for a second visit.
