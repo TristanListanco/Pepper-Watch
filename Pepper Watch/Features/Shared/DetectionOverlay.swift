@@ -59,6 +59,8 @@ struct DetectionOverlay: View {
 
                 guard showLabels else { continue }
                 let confidence = showConfidence ? " " + detection.confidence.formatted(.percent.precision(.fractionLength(0))) : ""
+                // Drawn into the canvas; the overlay's accessibility summary describes the boxes.
+                // swiftlint:disable:next accessibility_label_for_image
                 let label = Text("\(Image(systemName: detection.leafClass.symbol)) \(detection.leafClass.shortName)\(confidence)")
                 let resolved = context.resolve(label.font(.caption2.weight(.semibold)).foregroundStyle(.white))
                 let textSize = resolved.measure(in: size)
@@ -99,12 +101,16 @@ struct AnnotatedImageView: View {
             Image(uiImage: image)
                 .resizable()
                 .scaledToFit()
+                .accessibilityLabel("Scan photo")
                 .overlay {
                     DetectionOverlay(detections: detections, imageSize: image.size, contentMode: .fit, highlightedID: highlightedID)
                 }
+                .accessibilityElement(children: .combine)
         } else {
             ImagePlaceholder()
                 .aspectRatio(3 / 4, contentMode: .fit)
+                .accessibilityElement()
+                .accessibilityLabel("No photo saved")
         }
     }
 }
@@ -117,6 +123,7 @@ struct ImagePlaceholder: View {
                 Image(systemName: "leaf")
                     .font(.title)
                     .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
             }
     }
 }

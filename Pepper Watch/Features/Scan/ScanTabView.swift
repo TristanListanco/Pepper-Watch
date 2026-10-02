@@ -104,6 +104,7 @@ struct FieldOnboardingView: View {
                         .font(.system(size: 88))
                         .foregroundStyle(.tint)
                         .symbolRenderingMode(.hierarchical)
+                        .accessibilityHidden(true)
                     Text("Set Up Your First Field")
                         .font(.largeTitle.weight(.bold))
                         .multilineTextAlignment(.center)
@@ -172,6 +173,7 @@ private struct OnboardingRow: View {
                 .font(.title)
                 .foregroundStyle(.tint)
                 .frame(width: 40)
+                .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text(title).font(.headline)
                 Text(detail).font(.subheadline).foregroundStyle(.secondary)
