@@ -181,6 +181,7 @@ struct FieldsHomeView: View {
                     Image(systemName: "location.fill")
                         .foregroundStyle(.tint)
                         .symbolEffect(.breathe)
+                        .accessibilityHidden(true)
                     Text("Finding your location…")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
@@ -301,6 +302,7 @@ struct FieldsOverviewMap: View {
                         .foregroundStyle(.white)
                         .padding(6)
                         .background(tint, in: .circle)
+                        .accessibilityLabel("Severity: \(activity[field.id]?.severity?.title ?? "no recent scans")")
                 }
             }
         }
