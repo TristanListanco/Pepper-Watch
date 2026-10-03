@@ -3,8 +3,8 @@
 //  PepperWatchWidgets
 //
 //  Home Screen and Lock Screen widgets showing a field's aphid status for the past 7 days.
-//  In a Smart Stack with Smart Rotate on, they rotate to the top at a field, while a field's
-//  infestation is moderate or worse, and on the morning a field is due for scouting.
+//  In a Smart Stack with Smart Rotate on, Field Status rotates to the top while its field needs
+//  attention, and Field Actions also at a field and on the morning a field is due for scouting.
 //
 
 import AppIntents
@@ -97,13 +97,9 @@ struct FieldStatusProvider: AppIntentTimelineProvider {
         return Timeline(entries: [entry(for: configuration, preview: false)], policy: .after(next))
     }
 
-    /// Smart Stack contexts for each field's widget: at the field, and when it needs attention.
-    func relevance() async -> WidgetRelevance<SelectFieldIntent> {
-        let fields = WidgetSnapshot.load()?.fields ?? []
-        return WidgetRelevance(FieldRelevance.contexts(for: fields).map {
-            WidgetRelevanceAttribute(configuration: SelectFieldIntent(field: WidgetFieldEntity($0.field)), context: $0.relevance)
-        })
-    }
+    // No relevance() here: WidgetKit applies a relevant configuration to the widget itself,
+    // replacing the field someone picked. The entries' relevance score still lets Smart Rotate
+    // bring the widget forward while its field needs attention.
 
     private func entry(for configuration: SelectFieldIntent, preview: Bool) -> FieldStatusEntry {
         let snapshot = WidgetSnapshot.load() ?? (preview ? .sample : WidgetSnapshot.empty)
@@ -151,7 +147,7 @@ struct FieldStatusWidget: Widget {
             FieldStatusWidgetEntryView(entry: entry)
         }
         .configurationDisplayName("Field Status")
-        .description("A field's aphid infestation and severity over the past 7 days. In a Smart Stack it comes forward at the field and when the field needs attention.")
+        .description("A field's aphid infestation and severity over the past 7 days. In a Smart Stack it comes forward when the field needs attention.")
         .supportedFamilies([.systemSmall, .systemMedium, .accessoryCircular, .accessoryRectangular, .accessoryInline])
     }
 }

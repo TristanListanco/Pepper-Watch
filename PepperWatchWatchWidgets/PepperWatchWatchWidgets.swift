@@ -2,20 +2,13 @@
 //  PepperWatchWatchWidgets.swift
 //  PepperWatchWatchWidgets
 //
-//  Smart Stack widgets. RelevantContext tells the Smart Stack when they matter: at one of your
-//  fields, the morning a field is due for scouting, and while a field is moderate or severe.
+//  Smart Stack widgets. The At Field widget uses RelevantContext to appear at one of your fields;
+//  Field Status keeps the field and metric chosen for it.
 //
 
 import AppIntents
 import SwiftUI
 import WidgetKit
-
-/// Smart Stack relevance built from the shared field contexts.
-private func widgetRelevance(includeTiming: Bool) -> WidgetRelevance<WatchFieldIntent> {
-    WidgetRelevance(WatchRelevance.contexts(includeTiming: includeTiming).map {
-        WidgetRelevanceAttribute(configuration: WatchFieldIntent(field: WatchFieldEntity($0.field)), context: $0.relevance)
-    })
-}
 
 // MARK: - Providers
 
@@ -40,15 +33,16 @@ struct FieldStatusProvider: AppIntentTimelineProvider {
         return Timeline(entries: [.current(configuration)], policy: .after(next))
     }
 
-    func relevance() async -> WidgetRelevance<WatchFieldIntent> {
-        widgetRelevance(includeTiming: true)
-    }
+    // No relevance() here: watchOS applies a relevant configuration to the widget itself,
+    // replacing the field and metric someone picked. The At Field widget covers being at a field.
 }
 
 struct AtFieldProvider: RelevanceEntriesProvider {
     /// Location only: this widget exists to greet you at the field.
     func relevance() async -> WidgetRelevance<WatchFieldIntent> {
-        widgetRelevance(includeTiming: false)
+        WidgetRelevance(WatchRelevance.contexts(includeTiming: false).map {
+            WidgetRelevanceAttribute(configuration: WatchFieldIntent(field: WatchFieldEntity($0.field)), context: $0.relevance)
+        })
     }
 
     func entry(configuration: WatchFieldIntent, context: Context) async throws -> FieldEntry {
