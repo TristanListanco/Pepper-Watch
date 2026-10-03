@@ -581,9 +581,6 @@ private struct HighlightsCard: View {
         .padding()
         .frame(maxWidth: .infinity, alignment: .leading)
         .glassEffect(.regular, in: .rect(cornerRadius: 24))
-        // Lets the accessibility audit tests find the card.
-        .accessibilityElement(children: .contain)
-        .accessibilityIdentifier("insights.highlights")
         .animation(.smooth, value: content)
         .animation(.smooth, value: isAI)
     }
