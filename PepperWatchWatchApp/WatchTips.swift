@@ -10,6 +10,10 @@ import TipKit
 
 enum WatchTips {
     static func configure() {
+        #if DEBUG
+        // `-PWHideTips YES` hides every tip, for screenshots.
+        if UserDefaults.standard.bool(forKey: "PWHideTips") { Tips.hideAllTipsForTesting() }
+        #endif
         try? Tips.configure([.displayFrequency(.immediate)])
     }
 }
