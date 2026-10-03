@@ -16,6 +16,10 @@ enum PepperWatchTips {
             try? Tips.resetDatastore()
             UserDefaults.standard.set(false, forKey: resetKey)
         }
+        #if DEBUG
+        // `-PWHideTips YES` hides every tip, for screenshots.
+        if UserDefaults.standard.bool(forKey: "PWHideTips") { Tips.hideAllTipsForTesting() }
+        #endif
         try? Tips.configure([.displayFrequency(.immediate)])
     }
 
