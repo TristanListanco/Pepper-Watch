@@ -159,6 +159,24 @@ extension ShapeStyle where Self == AnyShapeStyle {
     static var secondaryText: AnyShapeStyle { AnyShapeStyle(.primary.opacity(0.6)) }
 }
 
+/// The system's labeled-content layout with the value in `.secondaryText` instead of the
+/// system gray.
+struct LegibleLabeledContentStyle: LabeledContentStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        LabeledContent {
+            configuration.content
+                .foregroundStyle(.secondaryText)
+        } label: {
+            configuration.label
+        }
+        .labeledContentStyle(.automatic)
+    }
+}
+
+extension LabeledContentStyle where Self == LegibleLabeledContentStyle {
+    static var legible: LegibleLabeledContentStyle { LegibleLabeledContentStyle() }
+}
+
 extension Color {
     /// This color as text: darkened in light mode, or lightened in dark mode, only as far as it
     /// takes to read at 4.5:1 on the app's pages and cards. Icons, chart marks and fills keep the
