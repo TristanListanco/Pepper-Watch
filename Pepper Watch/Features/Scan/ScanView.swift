@@ -15,7 +15,6 @@ struct ScanView: View {
     @Environment(DetectionEngine.self) private var engine
     @Environment(\.scenePhase) private var scenePhase
     @Environment(\.openURL) private var openURL
-    @Environment(\.modelContext) private var modelContext
     @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     @AppStorage(SettingsKey.showLabels) private var showLabels = true
@@ -40,16 +39,6 @@ struct ScanView: View {
     /// iPad keeps its controls in a rail on the side, like the Camera app.
     private var usesSideRail: Bool { horizontalSizeClass == .regular }
 
-    /// Saves a new name as soon as renaming ends; blank names are ignored.
-    private var nameBinding: Binding<String> {
-        Binding {
-            field.name
-        } set: { newName in
-            guard field.rename(to: newName) else { return }
-            try? modelContext.save()
-        }
-    }
-
     var body: some View {
         ZStack {
             Color.black.ignoresSafeArea()
@@ -67,9 +56,7 @@ struct ScanView: View {
                     }
                 }
         }
-        // Tap the title to rename the field in place.
-        .navigationTitle(nameBinding)
-        .toolbarTitleMenu { RenameButton() }
+        .navigationTitle(field.name)
         .navigationBarTitleDisplayMode(.inline)
         .toolbarBackground(.hidden, for: .navigationBar)
         .toolbarColorScheme(.dark, for: .navigationBar)
