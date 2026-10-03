@@ -243,7 +243,7 @@ struct InsightsView: View {
                 if pinned.isEmpty {
                     Label("Pin the metrics you check most. Tap Edit or long-press a metric below.", systemImage: "pin")
                         .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.secondaryText)
                         .padding()
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .background(.card, in: .rect(cornerRadius: 20))
@@ -472,7 +472,7 @@ private struct SectionHeader: View {
                 if let detail {
                     Text(detail)
                         .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.secondaryText)
                 }
             }
             Spacer()
@@ -523,7 +523,7 @@ private struct HighlightsCard: View {
                     }
                 }
                 .font(.subheadline.weight(.semibold))
-                .foregroundStyle(Color.highlight)
+                .foregroundStyle(Color.highlight.legible)
                 Spacer(minLength: 0)
                 if narrator.phase == .generating {
                     ProgressView()
@@ -541,7 +541,7 @@ private struct HighlightsCard: View {
                     }
                     .padding(-12)
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.secondaryText)
                     .symbolEffect(.rotate, value: regenerations)
                 }
             }
@@ -610,11 +610,11 @@ struct InsightSummaryCard: View {
             HStack {
                 Label(metric.title, systemImage: metric.symbol)
                     .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(metric.tint)
+                    .foregroundStyle(metric.tint.legible)
                 Spacer()
                 Text(caption)
                     .font(.footnote)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.secondaryText)
                 Image(systemName: "chevron.right")
                     .font(.footnote.weight(.semibold))
                     .foregroundStyle(.tertiary)
@@ -630,7 +630,7 @@ struct InsightSummaryCard: View {
                         .contentTransition(.numericText())
                     Text(unit)
                         .font(.subheadline.weight(.medium))
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.secondaryText)
                 }
                 if !dynamicTypeSize.isAccessibilitySize {
                     Spacer(minLength: 8)

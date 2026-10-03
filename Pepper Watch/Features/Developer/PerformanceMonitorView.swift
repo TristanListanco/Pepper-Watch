@@ -32,7 +32,7 @@ struct PerformanceMonitorView: View {
                 if scanner.performanceSamples.isEmpty {
                     Text("Open the Scan tab to collect live FPS and latency samples. The most recent run is kept here.")
                         .font(.subheadline)
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.secondaryText)
                 } else if horizontalSizeClass == .regular {
                     HStack(alignment: .top, spacing: 24) {
                         liveFPSChart
@@ -66,7 +66,7 @@ struct PerformanceMonitorView: View {
             Section {
                 if sessions.isEmpty {
                     Text("No scanning sessions recorded yet.")
-                        .foregroundStyle(.secondary)
+                        .foregroundStyle(.secondaryText)
                 }
                 ForEach(sessions.prefix(5)) { session in
                     SessionRow(session: session, target: fpsTarget)
@@ -179,7 +179,7 @@ struct PerformanceMonitorView: View {
             } else {
                 Text("MetricKit sends a report about once a day on a device. The first one shows up here the day after you scan.")
                     .font(.subheadline)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.secondaryText)
             }
             if metrics.diagnosticsReceived > 0 {
                 LabeledContent("Diagnostics", value: "\(metrics.diagnosticsReceived) this launch")
@@ -213,10 +213,10 @@ struct PerformanceMonitorView: View {
             Text("Throughput (FPS)").font(.subheadline.weight(.semibold))
             Chart {
                 RuleMark(y: .value("Target", fpsTarget))
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.secondaryText)
                     .lineStyle(StrokeStyle(lineWidth: 1, dash: [4, 4]))
                     .annotation(position: .top, alignment: .trailing, spacing: 2) {
-                        Text("Target \(fpsTarget.fixed(0))").font(.caption2).foregroundStyle(.secondary)
+                        Text("Target \(fpsTarget.fixed(0))").font(.caption2).foregroundStyle(.secondaryText)
                     }
                 LinePlot(scanner.performanceSamples, x: .value("Time", \.date), y: .value("FPS", \.fps))
                     .foregroundStyle(.tint)
@@ -297,7 +297,7 @@ struct SessionsTableView: View {
                             .fontWeight(.semibold)
                         Text(session.startedAt, format: .dateTime.month().day().hour().minute())
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(.secondaryText)
                     }
                 }
             }
@@ -309,7 +309,7 @@ struct SessionsTableView: View {
             TableColumn("Throughput", value: \.averageFPS) { session in
                 let passes = session.averageFPS >= fpsTarget
                 Label("\(session.averageFPS.fixed(1)) FPS", systemImage: passes ? Severity.clear.symbol : Severity.severe.symbol)
-                    .foregroundStyle(passes ? Severity.clear.color : Severity.severe.color)
+                    .foregroundStyle((passes ? Severity.clear.color : Severity.severe.color).legible)
                     .monospacedDigit()
             }
             TableColumn("Latency", value: \.averageInferenceMs) { session in
@@ -340,15 +340,15 @@ private struct SessionRow: View {
                     .font(.subheadline.weight(.semibold))
                 Text(session.startedAt, format: .dateTime.month().day().hour().minute())
                     .font(.caption)
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.secondaryText)
                 Text("\(session.framesProcessed.formatted()) frames · \(session.averageInferenceMs.fixed(1)) ms · \(session.computeUnits)")
                     .font(.caption2.monospacedDigit())
-                    .foregroundStyle(.secondary)
+                    .foregroundStyle(.secondaryText)
             }
             Spacer()
             Label("\(session.averageFPS.fixed(1)) FPS", systemImage: passes ? Severity.clear.symbol : Severity.severe.symbol)
                 .font(.subheadline.weight(.semibold).monospacedDigit())
-                .foregroundStyle(passes ? Severity.clear.color : Severity.severe.color)
+                .foregroundStyle((passes ? Severity.clear.color : Severity.severe.color).legible)
                 .accessibilityLabel("\(session.averageFPS.fixed(1)) frames per second, \(passes ? "meets" : "below") target")
         }
     }

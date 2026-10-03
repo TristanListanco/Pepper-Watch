@@ -22,7 +22,7 @@ xcodebuild test -project "Pepper Watch.xcodeproj" -scheme PepperWatchWatchApp \
   -destination "platform=watchOS Simulator,name=Apple Watch Ultra 4 (49mm)"
 ```
 
-The **Pepper Watch** scheme also runs `PepperWatchUITests`, which runs Xcode's accessibility audit (contrast, element descriptions, hit regions, Dynamic Type, clipped text and traits) on each screen of the app, opened on demo data. Contrast and Dynamic Type findings the app has today are reported as expected failures, so they stay visible in the test report while the rest of the audit gates the build.
+The **Pepper Watch** scheme also runs `PepperWatchUITests`, which runs Xcode's accessibility audit (contrast, element descriptions, hit regions, Dynamic Type, clipped text and traits) on each screen of the app, opened on demo data. Element descriptions, hit regions, traits and clipped text gate the build. Contrast and text detection are measured from rendered pixels and vary between simulators, so their findings, like the Dynamic Type findings the app has today, are reported as expected failures: they stay visible in the test report without failing the run.
 
 The [Tests workflow](.github/workflows/tests.yml) runs all of these on every pull request and every push to `main`.
 
